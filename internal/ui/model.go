@@ -34,9 +34,10 @@ const (
 	secGear       = 5
 	secInventory  = 6
 	secTinyItems  = 7
+	secConditions = 8
 )
 
-const numSections = 8
+const numSections = 9
 
 type Model struct {
 	char   *character.Character
@@ -71,11 +72,10 @@ func visualLayout(c *character.Character) [][]string {
 	rows := [][]string{
 		// Identity row
 		{"Name", "Age", "Kin", "Profession", "weakness:name"},
-		// Attributes (left) and Resources (right) are rendered side-by-side in one band.
-		// Row 1 of that band: attrs STR/CON/AGL on the left, HP/WP on the right.
-		{"STR", "CON", "AGL", "currentHP", "currentWP"},
-		// Row 2 of that band: attrs INT/WIL/CHA on the left; right column is read-only text.
-		{"INT", "WIL", "CHA"},
+		// Attributes (left, paired to match conditions), Derived (middle), Conditions (right, two columns).
+		{"STR", "INT", "currentHP", "currentWP", "cond:exhausted", "cond:angry"},
+		{"CON", "WIL", "cond:sickly", "cond:scared"},
+		{"AGL", "CHA", "cond:dazed", "cond:disheartened"},
 	}
 	var generalIdx, weaponIdx []int
 	for i, sk := range c.Skills {
@@ -85,9 +85,10 @@ func visualLayout(c *character.Character) [][]string {
 			generalIdx = append(generalIdx, i)
 		}
 	}
-	appendPairs := func(indices []int) {
+	skillPairRows := func(indices []int) [][]string {
 		n := len(indices)
 		nRows := (n + 1) / 2
+		var result [][]string
 		for r := range nRows {
 			a := indices[r]
 			row := []string{
@@ -101,33 +102,61 @@ func visualLayout(c *character.Character) [][]string {
 					fmt.Sprintf("skill:%d:adv", b),
 				)
 			}
-			rows = append(rows, row)
+			result = append(result, row)
 		}
+		return result
 	}
-	appendPairs(generalIdx)
-	appendPairs(weaponIdx)
+	genRows := skillPairRows(generalIdx)
+	var weapRows [][]string
+	for _, i := range weaponIdx {
+		weapRows = append(weapRows, []string{
+			fmt.Sprintf("skill:%d:level", i),
+			fmt.Sprintf("skill:%d:adv", i),
+		})
+	}
+	for r := range max(len(genRows), len(weapRows)) {
+		var row []string
+		if r < len(genRows) {
+			row = append(row, genRows[r]...)
+		}
+		if r < len(weapRows) {
+			row = append(row, weapRows[r]...)
+		}
+		rows = append(rows, row)
+	}
 
 	// Gear section
 	rows = append(rows, []string{"armor", "helmet"})
 	rows = append(rows, []string{"wah:0", "wah:1", "wah:2"})
+	// Inventory and tiny items rendered side by side.
+	var invRows [][]string
 	if len(c.Inventory) == 0 {
-		rows = append(rows, []string{"inv:empty"})
+		invRows = append(invRows, []string{"inv:empty"})
 	} else {
 		for i := range len(c.Inventory) {
-			rows = append(rows, []string{
+			invRows = append(invRows, []string{
 				fmt.Sprintf("inv:%d:name", i),
 				fmt.Sprintf("inv:%d:weight", i),
 			})
 		}
 	}
-
-	// Tiny items section
+	var tinyRows [][]string
 	if len(c.TinyItems) == 0 {
-		rows = append(rows, []string{"tiny:empty"})
+		tinyRows = append(tinyRows, []string{"tiny:empty"})
 	} else {
 		for i := range len(c.TinyItems) {
-			rows = append(rows, []string{fmt.Sprintf("tiny:%d", i)})
+			tinyRows = append(tinyRows, []string{fmt.Sprintf("tiny:%d", i)})
 		}
+	}
+	for r := range max(len(invRows), len(tinyRows)) {
+		var row []string
+		if r < len(invRows) {
+			row = append(row, invRows[r]...)
+		}
+		if r < len(tinyRows) {
+			row = append(row, tinyRows[r]...)
+		}
+		rows = append(rows, row)
 	}
 
 	return rows
@@ -166,6 +195,8 @@ func fieldMetaFor(label string) field {
 		return field{kindLabel, label, secInventory}
 	case label == "tiny:empty":
 		return field{kindLabel, label, secTinyItems}
+	case strings.HasPrefix(label, "cond:"):
+		return field{kindBool, label, secConditions}
 	}
 	return field{label: label}
 }

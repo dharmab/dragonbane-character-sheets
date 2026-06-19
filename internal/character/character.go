@@ -82,6 +82,15 @@ type Item struct {
 	Weight int    `json:"weight"` // slots consumed; 1 = 1 slot, 2 = 2 slots, etc.
 }
 
+type Conditions struct {
+	Exhausted    bool `json:"exhausted"`
+	Sickly       bool `json:"sickly"`
+	Dazed        bool `json:"dazed"`
+	Angry        bool `json:"angry"`
+	Scared       bool `json:"scared"`
+	Disheartened bool `json:"disheartened"`
+}
+
 type Character struct {
 	Name          string            `json:"name"`
 	Kin           Kin               `json:"kin"`
@@ -90,6 +99,7 @@ type Character struct {
 	Attributes    map[Attribute]int `json:"attributes"`
 	CurrentHP     int               `json:"current_hp"`
 	CurrentWP     int               `json:"current_wp"`
+	Conditions    Conditions        `json:"conditions"`
 	Skills        []Skill           `json:"skills"`
 	Weakness      Weakness          `json:"weakness"`
 	Armor         string            `json:"armor"`

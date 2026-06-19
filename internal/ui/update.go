@@ -430,11 +430,24 @@ func (m *Model) adjustInt(delta int) {
 
 func (m *Model) toggleBool() {
 	f := m.currentField()
-	if strings.HasPrefix(f.label, "skill:") {
+	switch {
+	case strings.HasPrefix(f.label, "skill:"):
 		idx := skillIndex(f.label)
 		if idx >= 0 && idx < len(m.char.Skills) {
 			m.char.Skills[idx].Advanced = !m.char.Skills[idx].Advanced
 		}
+	case f.label == "cond:exhausted":
+		m.char.Conditions.Exhausted = !m.char.Conditions.Exhausted
+	case f.label == "cond:sickly":
+		m.char.Conditions.Sickly = !m.char.Conditions.Sickly
+	case f.label == "cond:dazed":
+		m.char.Conditions.Dazed = !m.char.Conditions.Dazed
+	case f.label == "cond:angry":
+		m.char.Conditions.Angry = !m.char.Conditions.Angry
+	case f.label == "cond:scared":
+		m.char.Conditions.Scared = !m.char.Conditions.Scared
+	case f.label == "cond:disheartened":
+		m.char.Conditions.Disheartened = !m.char.Conditions.Disheartened
 	}
 }
 

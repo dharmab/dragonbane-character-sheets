@@ -41,11 +41,10 @@ func (m Model) View() string {
 	chunks := []secChunk{
 		{sHdr.Render(" DRAGONBANE CHARACTER SHEET") + "\n" + sep, nil},
 		{m.viewIdentity() + sep, []int{secIdentity, secWeakness}},
-		{m.viewAttrResources(w) + sep, []int{secAttributes, secResources}},
+		{m.viewAttrResources(w) + sep, []int{secAttributes, secResources, secConditions}},
 		{m.viewSkills() + sep, []int{secSkills}},
 		{m.viewGear() + sep, []int{secGear}},
-		{m.viewInventory() + sep, []int{secInventory}},
-		{m.viewTinyItems(), []int{secTinyItems}},
+		{m.viewInventoryAndTiny(w), []int{secInventory, secTinyItems}},
 	}
 
 	// Status bar is pinned at the bottom and excluded from scrollable content.
@@ -149,12 +148,14 @@ func (m Model) viewWeaknessEdit() string {
 }
 
 func (m Model) viewAttrResources(w int) string {
-	leftWidth := max(42, w/3)
+	leftWidth := max(36, w/4)
+	midWidth := max(36, w/4)
 
 	attrLines := []string{
 		sHdr.Render(" ATTRIBUTES"),
-		m.attrRow(character.STR, character.CON, character.AGL),
-		m.attrRow(character.INT, character.WIL, character.CHA),
+		m.attrRow(character.STR, character.INT),
+		m.attrRow(character.CON, character.WIL),
+		m.attrRow(character.AGL, character.CHA),
 	}
 
 	agl := m.char.Attributes[character.AGL]
@@ -164,39 +165,54 @@ func (m Model) viewAttrResources(w int) string {
 	maxHP := character.HP(con)
 	maxWP := character.WP(wil)
 
-	rightLines := []string{
+	derivedLines := []string{
 		sHdr.Render("DERIVED"),
-		fmt.Sprintf(" HP %s / %-4d  WP %s / %-4d  Movement: %dm",
+		fmt.Sprintf(" HP %s / %d   WP %s / %d",
 			m.fnum("currentHP", m.char.CurrentHP), maxHP,
-			m.fnum("currentWP", m.char.CurrentWP), maxWP,
-			character.Movement(m.char.Kin, agl)),
+			m.fnum("currentWP", m.char.CurrentWP), maxWP),
+		fmt.Sprintf(" Movement: %dm", character.Movement(m.char.Kin, agl)),
 		fmt.Sprintf(" STR Bonus: %s   AGL Bonus: %s",
 			character.DamageBonus(str),
 			character.DamageBonus(agl)),
 	}
 
-	col := lipgloss.NewStyle().Width(leftWidth)
-	divider := sCol.Render("│")
+	conds := m.char.Conditions
+	condLeft := lipgloss.NewStyle().Width(16)
+	condPair := func(l1, n1 string, v1 bool, l2, n2 string, v2 bool) string {
+		return " " + condLeft.Render(m.fbool(l1, n1, v1)) + m.fbool(l2, n2, v2)
+	}
+	condLines := []string{
+		sHdr.Render("CONDITIONS"),
+		condPair("cond:exhausted", "Exhausted", conds.Exhausted, "cond:angry", "Angry", conds.Angry),
+		condPair("cond:sickly", "Sickly", conds.Sickly, "cond:scared", "Scared", conds.Scared),
+		condPair("cond:dazed", "Dazed", conds.Dazed, "cond:disheartened", "Disheartened", conds.Disheartened),
+	}
+
+	leftCol := lipgloss.NewStyle().Width(leftWidth)
+	midCol := lipgloss.NewStyle().Width(midWidth)
+	div := sCol.Render("│")
 	var lines []string
-	n := max(len(attrLines), len(rightLines))
+	n := max(max(len(attrLines), len(derivedLines)), len(condLines))
 	for i := range n {
-		l, r := "", ""
+		l, mid, r := "", "", ""
 		if i < len(attrLines) {
 			l = attrLines[i]
 		}
-		if i < len(rightLines) {
-			r = rightLines[i]
+		if i < len(derivedLines) {
+			mid = derivedLines[i]
 		}
-		lines = append(lines, col.Render(l)+" "+divider+" "+r)
+		if i < len(condLines) {
+			r = condLines[i]
+		}
+		lines = append(lines, leftCol.Render(l)+" "+div+" "+midCol.Render(mid)+" "+div+" "+r)
 	}
 	return strings.Join(lines, "\n") + "\n"
 }
 
-func (m Model) attrRow(a1, a2, a3 character.Attribute) string {
-	return fmt.Sprintf(" %s %-8s  %s %-8s  %s %s",
+func (m Model) attrRow(a1, a2 character.Attribute) string {
+	return fmt.Sprintf(" %s %-8s  %s %s",
 		a1, m.fnum(string(a1), m.char.Attributes[a1]),
 		a2, m.fnum(string(a2), m.char.Attributes[a2]),
-		a3, m.fnum(string(a3), m.char.Attributes[a3]),
 	)
 }
 
@@ -223,9 +239,8 @@ func (m Model) viewSkills() string {
 		return nameCol.Render(sk.Name) + " " + string(sk.Attribute) + "  " + lvlCol.Render(lvlStr) + " " + adv
 	}
 
-	renderSection := func(indices []int) []string {
-		var slines []string
-		slines = append(slines, pairHdr)
+	renderSection := func(title string, indices []int) []string {
+		slines := []string{sHdr.Render(title), pairHdr}
 		n := len(indices)
 		nRows := (n + 1) / 2
 		for r := range nRows {
@@ -247,18 +262,36 @@ func (m Model) viewSkills() string {
 		}
 	}
 
-	var lines []string
-	lines = append(lines, sHdr.Render(" SKILLS"))
-
 	if len(general) == 0 && len(weapon) == 0 {
-		lines = append(lines, sDim.Render(" (none)"))
-		return strings.Join(lines, "\n") + "\n"
+		return sHdr.Render(" SKILLS") + "\n" + sDim.Render(" (none)") + "\n"
 	}
 
-	lines = append(lines, renderSection(general)...)
-	if len(weapon) > 0 {
-		lines = append(lines, sHdr.Render(" WEAPON SKILLS"))
-		lines = append(lines, renderSection(weapon)...)
+	genLines := renderSection(" SKILLS", general)
+	if len(weapon) == 0 {
+		return strings.Join(genLines, "\n") + "\n"
+	}
+	weapLines := func() []string {
+		slines := []string{sHdr.Render(" WEAPON SKILLS"), colHdr}
+		for _, i := range weapon {
+			slines = append(slines, " "+skillCell(i))
+		}
+		return slines
+	}()
+
+	// nameW=20, cell=36, inner div=5, pair row = 1+36+5+36 = 78
+	const pairRowW = 78
+	leftCol := lipgloss.NewStyle().Width(pairRowW)
+	mainDiv := sCol.Render("│")
+	var lines []string
+	for i := range max(len(genLines), len(weapLines)) {
+		l, r := "", ""
+		if i < len(genLines) {
+			l = genLines[i]
+		}
+		if i < len(weapLines) {
+			r = weapLines[i]
+		}
+		lines = append(lines, leftCol.Render(l)+" "+mainDiv+" "+r)
 	}
 
 	return strings.Join(lines, "\n") + "\n"
@@ -296,6 +329,26 @@ func (m Model) viewGear() string {
 	lines = append(lines, " Weapons:  "+strings.Join(wahParts, "  "))
 	lines = append(lines, sDim.Render(" d doff equipped item → inventory"))
 
+	return strings.Join(lines, "\n") + "\n"
+}
+
+func (m Model) viewInventoryAndTiny(w int) string {
+	invWidth := max(44, w/2)
+	invLines := strings.Split(strings.TrimRight(m.viewInventory(), "\n"), "\n")
+	tinyLines := strings.Split(strings.TrimRight(m.viewTinyItems(), "\n"), "\n")
+	invCol := lipgloss.NewStyle().Width(invWidth)
+	div := sCol.Render("│")
+	var lines []string
+	for i := range max(len(invLines), len(tinyLines)) {
+		l, r := "", ""
+		if i < len(invLines) {
+			l = invLines[i]
+		}
+		if i < len(tinyLines) {
+			r = tinyLines[i]
+		}
+		lines = append(lines, invCol.Render(l)+" "+div+" "+r)
+	}
 	return strings.Join(lines, "\n") + "\n"
 }
 
@@ -388,6 +441,17 @@ func (m Model) fnum(label string, v int) string {
 		return sSel.Render("[ " + s + " ]")
 	}
 	return s
+}
+
+func (m Model) fbool(label, name string, val bool) string {
+	check := "[ ] " + name
+	if val {
+		check = "[x] " + name
+	}
+	if m.fieldIndex(label) == m.focus {
+		return sSel.Render(check)
+	}
+	return check
 }
 
 func (m Model) fieldIndex(label string) int {
