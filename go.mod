@@ -1,6 +1,6 @@
-module dragonbane-char
+module github.com/dharmab/dragonbane-charsheet
 
-go 1.26.4
+go 1.26
 
 require (
 	github.com/charmbracelet/bubbles v1.0.0

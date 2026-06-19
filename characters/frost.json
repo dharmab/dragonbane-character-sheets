@@ -1,0 +1,207 @@
+{
+  "name": "Dr. James Frost",
+  "kin": "Human",
+  "profession": "Scholar",
+  "age": "Adult",
+  "attributes": {
+    "AGL": 11,
+    "CHA": 12,
+    "CON": 17,
+    "INT": 16,
+    "STR": 10,
+    "WIL": 16
+  },
+  "current_hp": 17,
+  "current_wp": 16,
+  "skills": [
+    {
+      "name": "Acrobatics",
+      "level": 5,
+      "advanced": false
+    },
+    {
+      "name": "Awareness",
+      "level": 14,
+      "advanced": false
+    },
+    {
+      "name": "Bartering",
+      "level": 5,
+      "advanced": false
+    },
+    {
+      "name": "Beast Lore",
+      "level": 7,
+      "advanced": false
+    },
+    {
+      "name": "Bluffing",
+      "level": 10,
+      "advanced": false
+    },
+    {
+      "name": "Bushcraft",
+      "level": 7,
+      "advanced": false
+    },
+    {
+      "name": "Crafting",
+      "level": 5,
+      "advanced": false
+    },
+    {
+      "name": "Evade",
+      "level": 11,
+      "advanced": false
+    },
+    {
+      "name": "Healing",
+      "level": 14,
+      "advanced": false
+    },
+    {
+      "name": "Hunting \u0026 Fishing",
+      "level": 5,
+      "advanced": false
+    },
+    {
+      "name": "Languages",
+      "level": 14,
+      "advanced": false
+    },
+    {
+      "name": "Myths \u0026 Legends",
+      "level": 14,
+      "advanced": false
+    },
+    {
+      "name": "Performance",
+      "level": 5,
+      "advanced": false
+    },
+    {
+      "name": "Persuasion",
+      "level": 11,
+      "advanced": false
+    },
+    {
+      "name": "Riding",
+      "level": 5,
+      "advanced": false
+    },
+    {
+      "name": "Seamanship",
+      "level": 7,
+      "advanced": false
+    },
+    {
+      "name": "Sleight of Hand",
+      "level": 5,
+      "advanced": false
+    },
+    {
+      "name": "Sneaking",
+      "level": 5,
+      "advanced": false
+    },
+    {
+      "name": "Spot Hidden",
+      "level": 14,
+      "advanced": false
+    },
+    {
+      "name": "Swimming",
+      "level": 5,
+      "advanced": false
+    },
+    {
+      "name": "Axes",
+      "level": 5,
+      "advanced": false
+    },
+    {
+      "name": "Bows",
+      "level": 5,
+      "advanced": false
+    },
+    {
+      "name": "Brawling",
+      "level": 5,
+      "advanced": false
+    },
+    {
+      "name": "Crossbows",
+      "level": 10,
+      "advanced": false
+    },
+    {
+      "name": "Hammers",
+      "level": 5,
+      "advanced": false
+    },
+    {
+      "name": "Knives",
+      "level": 12,
+      "advanced": false
+    },
+    {
+      "name": "Slings",
+      "level": 5,
+      "advanced": false
+    },
+    {
+      "name": "Spears",
+      "level": 5,
+      "advanced": false
+    },
+    {
+      "name": "Staves",
+      "level": 5,
+      "advanced": false
+    },
+    {
+      "name": "Swords",
+      "level": 5,
+      "advanced": false
+    }
+  ],
+  "weakness": {
+    "name": "Obstinate",
+    "description": "I never admit when I'm wrong."
+  },
+  "armor": "",
+  "helmet": "",
+  "weapons_at_hand": [
+    "Knife",
+    "",
+    ""
+  ],
+  "inventory": [
+    {
+      "name": "Lantern",
+      "weight": 1
+    },
+    {
+      "name": "Lamp oil",
+      "weight": 1
+    },
+    {
+      "name": "Sleeping poison",
+      "weight": 1
+    },
+    {
+      "name": "Bandage x10",
+      "weight": 1
+    },
+    {
+      "name": "Ration x4",
+      "weight": 1
+    }
+  ],
+  "tiny_items": [
+    "Silver coin x10",
+    "Gold coin x10",
+    "Flint \u0026 tinder",
+    "Spice vial"
+  ]
+}

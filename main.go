@@ -5,8 +5,8 @@ import (
 	"os"
 
 	tea "github.com/charmbracelet/bubbletea"
-	"dragonbane-char/internal/character"
-	"dragonbane-char/internal/ui"
+	"github.com/dharmab/dragonbane-charsheet/internal/character"
+	"github.com/dharmab/dragonbane-charsheet/internal/ui"
 )
 
 func main() {

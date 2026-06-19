@@ -6,7 +6,7 @@ import (
 
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
-	"dragonbane-char/internal/character"
+	"github.com/dharmab/dragonbane-charsheet/internal/character"
 )
 
 type fieldKind int

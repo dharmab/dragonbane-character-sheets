@@ -5,7 +5,7 @@ import (
 	"strings"
 
 	"github.com/charmbracelet/lipgloss"
-	"dragonbane-char/internal/character"
+	"github.com/dharmab/dragonbane-charsheet/internal/character"
 )
 
 const fallbackWidth = 80
