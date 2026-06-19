@@ -97,9 +97,11 @@ type Character struct {
 	Profession    Profession        `json:"profession"`
 	Age           Age               `json:"age"`
 	Attributes    map[Attribute]int `json:"attributes"`
-	CurrentHP     int               `json:"current_hp"`
-	CurrentWP     int               `json:"current_wp"`
-	Conditions    Conditions        `json:"conditions"`
+	CurrentHP        int               `json:"current_hp"`
+	CurrentWP        int               `json:"current_wp"`
+	Conditions       Conditions        `json:"conditions"`
+	RoundRestUsed    bool              `json:"round_rest_used"`
+	StretchRestUsed  bool              `json:"stretch_rest_used"`
 	Skills        []Skill           `json:"skills"`
 	Weakness      Weakness          `json:"weakness"`
 	Armor         string            `json:"armor"`

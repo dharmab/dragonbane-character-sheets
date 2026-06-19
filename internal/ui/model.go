@@ -71,7 +71,7 @@ type Model struct {
 func visualLayout(c *character.Character) [][]string {
 	rows := [][]string{
 		// Identity row
-		{"Name", "Age", "Kin", "Profession", "weakness:name"},
+		{"Name", "Age", "Kin", "Profession", "weakness:name", "rest:round", "rest:stretch"},
 		// Attributes (left, paired to match conditions), Derived (middle), Conditions (right, two columns).
 		{"STR", "INT", "currentHP", "currentWP", "cond:exhausted", "cond:angry"},
 		{"CON", "WIL", "cond:sickly", "cond:scared"},
@@ -126,8 +126,7 @@ func visualLayout(c *character.Character) [][]string {
 	}
 
 	// Gear section
-	rows = append(rows, []string{"armor", "helmet"})
-	rows = append(rows, []string{"wah:0", "wah:1", "wah:2"})
+	rows = append(rows, []string{"armor", "helmet", "wah:0", "wah:1", "wah:2"})
 	// Inventory and tiny items rendered side by side.
 	var invRows [][]string
 	if len(c.Inventory) == 0 {
@@ -197,6 +196,8 @@ func fieldMetaFor(label string) field {
 		return field{kindLabel, label, secTinyItems}
 	case strings.HasPrefix(label, "cond:"):
 		return field{kindBool, label, secConditions}
+	case label == "rest:round" || label == "rest:stretch":
+		return field{kindBool, label, secIdentity}
 	}
 	return field{label: label}
 }

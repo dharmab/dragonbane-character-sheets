@@ -42,7 +42,7 @@ func (m Model) View() string {
 		{sHdr.Render(" DRAGONBANE CHARACTER SHEET") + "\n" + sep, nil},
 		{m.viewIdentity() + sep, []int{secIdentity, secWeakness}},
 		{m.viewAttrResources(w) + sep, []int{secAttributes, secResources, secConditions}},
-		{m.viewSkills() + sep, []int{secSkills}},
+		{m.viewSkills(w) + sep, []int{secSkills}},
 		{m.viewGear() + sep, []int{secGear}},
 		{m.viewInventoryAndTiny(w), []int{secInventory, secTinyItems}},
 	}
@@ -121,12 +121,14 @@ func (m Model) viewIdentity() string {
 	if weaknessName == "" {
 		weaknessName = "(none)"
 	}
-	return fmt.Sprintf(" Name: %s   Age: %s   Kin: %s   Profession: %s   Weakness: %s\n",
+	return fmt.Sprintf(" Name: %s   Age: %s   Kin: %s   Profession: %s   Weakness: %s   %s   %s\n",
 		m.ftext("Name", m.char.Name),
 		m.fenum("Age", string(m.char.Age)),
 		m.fenum("Kin", string(m.char.Kin)),
 		m.fenum("Profession", string(m.char.Profession)),
 		m.ftext("weakness:name", weaknessName),
+		m.fbool("rest:round", "Used Round Rest", m.char.RoundRestUsed),
+		m.fbool("rest:stretch", "Used Stretch Rest", m.char.StretchRestUsed),
 	)
 }
 
@@ -147,9 +149,16 @@ func (m Model) viewWeaknessEdit() string {
 	return b.String()
 }
 
+// col1W is the shared left-column width used by all multi-column sections,
+// so their dividers land on the same terminal column.
+// 78 is the minimum needed to fit a pair of general skills.
+func col1W(termW int) int { return max(78, termW/2) }
+
 func (m Model) viewAttrResources(w int) string {
-	leftWidth := max(36, w/4)
-	midWidth := max(36, w/4)
+	// leftWidth=38: first divider aligns with the inner skill-pair column split (col 39).
+	// midWidth: second divider aligns with the outer general/weapon skill split (col col1W+1).
+	const leftWidth = 38
+	midWidth := col1W(w) - leftWidth - 3
 
 	attrLines := []string{
 		sHdr.Render(" ATTRIBUTES"),
@@ -216,7 +225,7 @@ func (m Model) attrRow(a1, a2 character.Attribute) string {
 	)
 }
 
-func (m Model) viewSkills() string {
+func (m Model) viewSkills(w int) string {
 	const nameW = 20
 	nameCol := lipgloss.NewStyle().Width(nameW)
 	lvlCol := lipgloss.NewStyle().Width(6)
@@ -278,9 +287,7 @@ func (m Model) viewSkills() string {
 		return slines
 	}()
 
-	// nameW=20, cell=36, inner div=5, pair row = 1+36+5+36 = 78
-	const pairRowW = 78
-	leftCol := lipgloss.NewStyle().Width(pairRowW)
+	leftCol := lipgloss.NewStyle().Width(col1W(w))
 	mainDiv := sCol.Render("│")
 	var lines []string
 	for i := range max(len(genLines), len(weapLines)) {
@@ -309,10 +316,6 @@ func (m Model) viewGear() string {
 	if helmet == "" {
 		helmet = "—"
 	}
-	lines = append(lines, fmt.Sprintf(" Armor: %s   Helmet: %s",
-		m.ftext("armor", armor),
-		m.ftext("helmet", helmet)))
-
 	var wahParts []string
 	for i := range 3 {
 		label := fmt.Sprintf("wah:%d", i)
@@ -326,14 +329,17 @@ func (m Model) viewGear() string {
 		}
 		wahParts = append(wahParts, m.ftext(label, display))
 	}
-	lines = append(lines, " Weapons:  "+strings.Join(wahParts, "  "))
+	lines = append(lines, fmt.Sprintf(" Armor: %s   Helmet: %s   Weapons: %s",
+		m.ftext("armor", armor),
+		m.ftext("helmet", helmet),
+		strings.Join(wahParts, "  ")))
 	lines = append(lines, sDim.Render(" d doff equipped item → inventory"))
 
 	return strings.Join(lines, "\n") + "\n"
 }
 
 func (m Model) viewInventoryAndTiny(w int) string {
-	invWidth := max(44, w/2)
+	invWidth := col1W(w)
 	invLines := strings.Split(strings.TrimRight(m.viewInventory(), "\n"), "\n")
 	tinyLines := strings.Split(strings.TrimRight(m.viewTinyItems(), "\n"), "\n")
 	invCol := lipgloss.NewStyle().Width(invWidth)

@@ -448,6 +448,10 @@ func (m *Model) toggleBool() {
 		m.char.Conditions.Scared = !m.char.Conditions.Scared
 	case f.label == "cond:disheartened":
 		m.char.Conditions.Disheartened = !m.char.Conditions.Disheartened
+	case f.label == "rest:round":
+		m.char.RoundRestUsed = !m.char.RoundRestUsed
+	case f.label == "rest:stretch":
+		m.char.StretchRestUsed = !m.char.StretchRestUsed
 	}
 }
 
