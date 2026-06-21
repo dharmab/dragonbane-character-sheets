@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/charmbracelet/bubbles/textinput"
-	tea "github.com/charmbracelet/bubbletea"
+	"charm.land/bubbles/v2/textinput"
+	tea "charm.land/bubbletea/v2"
 	"github.com/dharmab/dragonbane-charsheet/internal/character"
 )
 
@@ -297,23 +297,23 @@ func New(c *character.Character, path string) Model {
 
 	wn := textinput.New()
 	wn.CharLimit = 256
-	wn.Width = 40
+	wn.SetWidth(40)
 
 	wd := textinput.New()
 	wd.CharLimit = 512
-	wd.Width = 60
+	wd.SetWidth(60)
 
 	an := textinput.New()
 	an.CharLimit = 256
-	an.Width = 40
+	an.SetWidth(40)
 
 	ac := textinput.New()
 	ac.CharLimit = 4
-	ac.Width = 6
+	ac.SetWidth(6)
 
 	ad := textinput.New()
 	ad.CharLimit = 512
-	ad.Width = 60
+	ad.SetWidth(60)
 
 	fields := buildFields(c)
 	m := Model{

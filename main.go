@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"os"
 
-	tea "github.com/charmbracelet/bubbletea"
+	tea "charm.land/bubbletea/v2"
 	"github.com/dharmab/dragonbane-charsheet/internal/character"
 	"github.com/dharmab/dragonbane-charsheet/internal/ui"
 )
@@ -22,7 +22,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	p := tea.NewProgram(ui.New(char, path), tea.WithAltScreen())
+	p := tea.NewProgram(ui.New(char, path))
 	if _, err := p.Run(); err != nil {
 		fmt.Fprintf(os.Stderr, "error: %v\n", err)
 		os.Exit(1)

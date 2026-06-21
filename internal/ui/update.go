@@ -5,8 +5,8 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/charmbracelet/bubbles/textinput"
-	tea "github.com/charmbracelet/bubbletea"
+	"charm.land/bubbles/v2/textinput"
+	tea "charm.land/bubbletea/v2"
 	"github.com/dharmab/dragonbane-charsheet/internal/character"
 )
 
@@ -16,13 +16,13 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.width = msg.Width
 		m.height = msg.Height
 		return m, nil
-	case tea.KeyMsg:
+	case tea.KeyPressMsg:
 		return m.handleKey(msg)
 	}
 	return m, nil
 }
 
-func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+func (m Model) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	key := msg.String()
 
 	if m.picking {
@@ -276,7 +276,7 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.autoSave()
 		}
 	case kindBool:
-		if key == " " {
+		if key == "space" {
 			m.toggleBool()
 			m.autoSave()
 		}
@@ -316,7 +316,7 @@ func (m *Model) startEditing() {
 	m.textInput.Focus()
 	m.textInput.SetValue(m.textFieldValue())
 	m.textInput.CursorEnd()
-	m.textInput.Width = m.textInputWidth()
+	m.textInput.SetWidth(m.textInputWidth())
 }
 
 func (m *Model) textInputWidth() int {
@@ -728,7 +728,7 @@ func (m *Model) closeAbilityEdit() {
 	m.abilityDesc.Blur()
 }
 
-func (m Model) handleAbilityKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+func (m Model) handleAbilityKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	key := msg.String()
 	switch key {
 	case "ctrl+c":
@@ -796,7 +796,7 @@ func (m Model) handleReqKey(key string) (tea.Model, tea.Cmd) {
 		if m.pickSelected < len(m.pickOptions)-1 {
 			m.pickSelected++
 		}
-	case " ":
+	case "space":
 		name := m.pickOptions[m.pickSelected]
 		m.reqChosen[name] = !m.reqChosen[name]
 	case "enter":
@@ -835,7 +835,7 @@ func (m *Model) commitCurrentWeaknessField() {
 	m.autoSave()
 }
 
-func (m Model) handleWeaknessKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+func (m Model) handleWeaknessKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	key := msg.String()
 	switch key {
 	case "ctrl+c":
