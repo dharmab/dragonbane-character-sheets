@@ -9,9 +9,9 @@ func TestMovement(t *testing.T) {
 		want int
 	}{
 		// Human / Elf base 10
-		{Human, 3, 6},   // AGL 1-6  → -4
+		{Human, 3, 6}, // AGL 1-6  → -4
 		{Human, 6, 6},
-		{Human, 7, 8},   // AGL 7-9  → -2
+		{Human, 7, 8}, // AGL 7-9  → -2
 		{Human, 9, 8},
 		{Human, 10, 10}, // AGL 10-12 → 0
 		{Human, 12, 10},

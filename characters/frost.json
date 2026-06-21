@@ -13,6 +13,16 @@
   },
   "current_hp": 17,
   "current_wp": 16,
+  "conditions": {
+    "exhausted": false,
+    "sickly": false,
+    "dazed": false,
+    "angry": false,
+    "scared": false,
+    "disheartened": false
+  },
+  "round_rest_used": false,
+  "stretch_rest_used": false,
   "skills": [
     {
       "name": "Acrobatics",
@@ -203,5 +213,6 @@
     "Gold coin x10",
     "Flint \u0026 tinder",
     "Spice vial"
-  ]
+  ],
+  "heroic_abilities": []
 }

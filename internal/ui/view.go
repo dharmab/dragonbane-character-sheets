@@ -2,6 +2,7 @@ package ui
 
 import (
 	"fmt"
+	"strconv"
 	"strings"
 
 	"github.com/charmbracelet/lipgloss"
@@ -13,14 +14,24 @@ const fallbackWidth = 80
 var (
 	sHdr  = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("214"))
 	sDim  = lipgloss.NewStyle().Foreground(lipgloss.Color("240"))
-	sSel  = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("212"))
+	sSel  = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("196"))
 	sEdit = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("118"))
 	sCol  = lipgloss.NewStyle().Foreground(lipgloss.Color("240"))
+	sWarn = lipgloss.NewStyle().Foreground(lipgloss.Color("196"))
 )
 
 func (m Model) View() string {
 	if m.picking {
 		return m.viewPicker()
+	}
+	if m.detailMode {
+		return m.viewAbilityDetail()
+	}
+	if m.reqMode {
+		return m.viewReqPicker()
+	}
+	if m.abilityMode {
+		return m.viewAbilityEdit()
 	}
 	if m.weaknessMode {
 		return m.viewWeaknessEdit()
@@ -43,6 +54,7 @@ func (m Model) View() string {
 		{m.viewIdentity() + sep, []int{secIdentity, secWeakness}},
 		{m.viewAttrResources(w) + sep, []int{secAttributes, secResources, secConditions}},
 		{m.viewSkills(w) + sep, []int{secSkills}},
+		{m.viewHeroicAbilities() + sep, []int{secHeroic}},
 		{m.viewGear() + sep, []int{secGear}},
 		{m.viewInventoryAndTiny(w), []int{secInventory, secTinyItems}},
 	}
@@ -79,7 +91,35 @@ func (m Model) View() string {
 	return join(allLines[scrollY:end]) + "\n" + join(statusLines)
 }
 
+func (m Model) viewAbilityPicker() string {
+	var b strings.Builder
+	b.WriteString(sHdr.Render("  Add Heroic Ability") + "\n")
+	b.WriteString(sDim.Render(strings.Repeat("─", 48)) + "\n")
+	start, end := pickWindow(m.pickSelected, len(m.abilityPicks), m.visibleRows())
+	for i := start; i < end; i++ {
+		p := m.abilityPicks[i]
+		switch {
+		case i == m.pickSelected && p.selectable:
+			b.WriteString(sSel.Render("  › "+p.display) + "\n")
+		case i == m.pickSelected && !p.selectable:
+			// Cursor can rest here so players can read the requirement, but it stays
+			// dim to signal it cannot be selected.
+			b.WriteString(sDim.Render("  › "+p.display) + "\n")
+		case !p.selectable:
+			b.WriteString(sDim.Render("    "+p.display) + "\n")
+		default:
+			b.WriteString("    " + p.display + "\n")
+		}
+	}
+	b.WriteString(sDim.Render(strings.Repeat("─", 48)) + "\n")
+	b.WriteString(sDim.Render("  ↑↓ move   enter select   esc cancel") + "\n")
+	return b.String()
+}
+
 func (m Model) viewPicker() string {
+	if m.pickAbility {
+		return m.viewAbilityPicker()
+	}
 	var title string
 	if m.pickEquipSource >= 0 {
 		name := m.char.Inventory[m.pickEquipSource].Name
@@ -104,7 +144,9 @@ func (m Model) viewPicker() string {
 	var b strings.Builder
 	b.WriteString(sHdr.Render(title) + "\n")
 	b.WriteString(sDim.Render(strings.Repeat("─", 30)) + "\n")
-	for i, opt := range m.pickOptions {
+	start, end := pickWindow(m.pickSelected, len(m.pickOptions), m.visibleRows())
+	for i := start; i < end; i++ {
+		opt := m.pickOptions[i]
 		if i == m.pickSelected {
 			b.WriteString(sSel.Render("  › "+opt) + "\n")
 		} else {
@@ -171,8 +213,8 @@ func (m Model) viewAttrResources(w int) string {
 	str := m.char.Attributes[character.STR]
 	con := m.char.Attributes[character.CON]
 	wil := m.char.Attributes[character.WIL]
-	maxHP := character.HP(con)
-	maxWP := character.WP(wil)
+	maxHP := character.HP(con) + character.AbilityHPBonus(m.char.HeroicAbilities)
+	maxWP := character.WP(wil) + character.AbilityWPBonus(m.char.HeroicAbilities)
 
 	derivedLines := []string{
 		sHdr.Render("DERIVED"),
@@ -410,6 +452,178 @@ func (m Model) viewTinyItems() string {
 		lines = append(lines, sDim.Render(" a add   x remove"))
 	}
 	return strings.Join(lines, "\n") + "\n"
+}
+
+func (m Model) viewHeroicAbilities() string {
+	const nameW, costW = 24, 4
+	nameCol := lipgloss.NewStyle().Width(nameW)
+	costCol := lipgloss.NewStyle().Width(costW)
+
+	var lines []string
+	lines = append(lines, sHdr.Render(" HEROIC ABILITIES"))
+	lines = append(lines, sDim.Render(fmt.Sprintf("   %-*s %-*s %s", nameW, "Name", costW, "WP", "Requires")))
+
+	// row renders one ability line. label is the field used for focus highlighting.
+	row := func(label, name string, cost int, reqs []string, met bool) {
+		costStr := "—"
+		if cost > 0 {
+			costStr = fmt.Sprintf("%d", cost)
+		}
+		reqCell := character.RequirementLabel(reqs)
+		marker := " "
+		if !met {
+			marker = sWarn.Render("!")
+			reqCell = sWarn.Render(reqCell)
+		}
+		nameCell := nameCol.Render(name)
+		if m.fieldIndex(label) == m.focus {
+			nameCell = sSel.Render(nameCol.Render(name))
+		}
+		lines = append(lines, marker+" "+nameCell+" "+costCol.Render(costStr)+" "+reqCell)
+	}
+
+	for i, a := range character.KinAbilities(m.char.Kin) {
+		row(fmt.Sprintf("kin:%d", i), a.Name, a.WPCost, nil, true)
+	}
+	for i, a := range m.char.HeroicAbilities {
+		name := a.Name
+		if name == "" {
+			name = "(unnamed)"
+		}
+		row(fmt.Sprintf("hab:%d", i), name, a.WPCost, a.Requirements, character.RequirementMet(m.char, a))
+	}
+	if len(character.KinAbilities(m.char.Kin)) == 0 && len(m.char.HeroicAbilities) == 0 {
+		lines = append(lines, " "+m.ftext("hab:empty", "(none — press 'a' to add)"))
+	}
+
+	lines = append(lines, sDim.Render(" a add   x remove   enter view/edit   =/- stack"))
+	return strings.Join(lines, "\n") + "\n"
+}
+
+// viewAbilityDetail is the read-only popup shown when viewing a kin ability's details.
+func (m Model) viewAbilityDetail() string {
+	a := m.detailAbility
+	var b strings.Builder
+	sep := sDim.Render(strings.Repeat("─", 64))
+	b.WriteString(sHdr.Render(" "+strings.ToUpper(a.Name)) + "\n")
+	b.WriteString(sep + "\n")
+	cost := "—"
+	if a.WPCost > 0 {
+		cost = fmt.Sprintf("%d", a.WPCost)
+	}
+	b.WriteString(" WP Cost: " + cost + "\n")
+	if label := character.RequirementLabel(a.Requirements); label != "" {
+		b.WriteString(" Requires: " + label + "\n")
+	}
+	b.WriteString("\n")
+	b.WriteString(" " + wrapText(a.Description, 62) + "\n")
+	b.WriteString(sep + "\n")
+	b.WriteString(sDim.Render("  press any key to close") + "\n")
+	return b.String()
+}
+
+// wrapText wraps s to the given width on word boundaries.
+func wrapText(s string, width int) string {
+	words := strings.Fields(s)
+	if len(words) == 0 {
+		return ""
+	}
+	var b strings.Builder
+	lineLen := 0
+	for i, word := range words {
+		if i > 0 && lineLen+1+len(word) > width {
+			b.WriteString("\n ")
+			lineLen = 0
+		} else if i > 0 {
+			b.WriteString(" ")
+			lineLen++
+		}
+		b.WriteString(word)
+		lineLen += len(word)
+	}
+	return b.String()
+}
+
+func (m Model) viewAbilityEdit() string {
+	a := m.char.HeroicAbilities[m.abilityIndex]
+	var b strings.Builder
+	sep := sDim.Render(strings.Repeat("─", 64))
+	b.WriteString(sHdr.Render(" HEROIC ABILITY") + "\n")
+	b.WriteString(sep + "\n")
+
+	textField := func(active int, label, val, view string) string {
+		if m.abilityActive == active {
+			return " " + label + ": " + sEdit.Render(view) + "\n"
+		}
+		if val == "" {
+			val = sDim.Render("(empty)")
+		}
+		return " " + label + ": " + val + "\n"
+	}
+	b.WriteString(textField(0, "Name", a.Name, m.abilityName.View()))
+	b.WriteString(textField(1, "WP Cost", strconv.Itoa(a.WPCost), m.abilityCost.View()))
+	b.WriteString(textField(2, "Desc", a.Description, m.abilityDesc.View()))
+
+	req := "(none)"
+	if label := character.RequirementLabel(a.Requirements); label != "" {
+		req = label
+	}
+	reqLine := " Requires: " + req
+	if m.abilityActive == 3 {
+		reqLine = sSel.Render(" Requires: " + req)
+	}
+	b.WriteString(reqLine + "   " + sDim.Render("(enter to choose)") + "\n")
+
+	b.WriteString(sep + "\n")
+	b.WriteString(sDim.Render("  tab next   enter edit reqs / done   esc done") + "\n")
+	return b.String()
+}
+
+func (m Model) viewReqPicker() string {
+	var b strings.Builder
+	b.WriteString(sHdr.Render("  Required Skills — any one satisfies") + "\n")
+	b.WriteString(sDim.Render(strings.Repeat("─", 44)) + "\n")
+	start, end := pickWindow(m.pickSelected, len(m.pickOptions), m.visibleRows())
+	for i := start; i < end; i++ {
+		opt := m.pickOptions[i]
+		box := "[ ]"
+		if m.reqChosen[opt] {
+			box = "[x]"
+		}
+		row := fmt.Sprintf(" %s %s", box, opt)
+		if i == m.pickSelected {
+			b.WriteString(sSel.Render(" ›"+row) + "\n")
+		} else {
+			b.WriteString("  " + row + "\n")
+		}
+	}
+	b.WriteString(sDim.Render(strings.Repeat("─", 44)) + "\n")
+	b.WriteString(sDim.Render("  ↑↓ move   space toggle   enter done   esc cancel") + "\n")
+	return b.String()
+}
+
+// visibleRows estimates how many option rows fit in a picker, leaving room for the
+// title, dividers, and footer.
+func (m Model) visibleRows() int {
+	if m.height <= 0 {
+		return 20
+	}
+	return max(3, m.height-6)
+}
+
+// pickWindow returns the [start, end) slice of options to show so the selected row
+// stays visible when the list is longer than the available rows.
+func pickWindow(sel, n, visible int) (start, end int) {
+	if n <= visible {
+		return 0, n
+	}
+	start = max(0, sel-visible/2)
+	end = start + visible
+	if end > n {
+		end = n
+		start = end - visible
+	}
+	return start, end
 }
 
 func (m Model) viewStatus() string {

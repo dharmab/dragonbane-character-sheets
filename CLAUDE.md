@@ -40,7 +40,7 @@ Fields are identified throughout by string labels — plain (`"STR"`, `"currentH
 
 Field kinds (`fieldKind`): `kindText`, `kindEnum`, `kindInt`, `kindBool`, `kindLabel` (non-interactive; navigation only, e.g. `inv:empty`).
 
-Sections (`numSections` = 9): `secIdentity`, `secAttributes`, `secResources`, `secSkills`, `secWeakness`, `secGear`, `secInventory`, `secTinyItems`, `secConditions`.
+Sections (`numSections` = 10): `secIdentity`, `secAttributes`, `secResources`, `secSkills`, `secWeakness`, `secGear`, `secInventory`, `secTinyItems`, `secConditions`, `secHeroic`.
 
 ## Interaction Model
 
@@ -56,7 +56,10 @@ Section-specific keys (see `handleKey` in `update.go`):
 - **Inventory**: `a` add row, `x` remove, `d` equip into a gear slot (opens a slot picker via `pickEquipSource`), `=`/`-` adjust quantity on the item name.
 - **Tiny items**: `a` add, `x` remove, `=`/`-` adjust quantity.
 - **Weakness** (`weakness:name`): `enter` opens a dedicated two-field modal (`weaknessMode`: name + description), navigated independently of the picker.
+- **Heroic abilities** — one focusable row per ability, kin-granted (`kin:N`, read-only) first, then chosen (`hab:N`). The main list shows name/WP/requires only; descriptions are not shown inline. `a` opens a picker of `PredefinedHeroicAbilities` plus a `Custom…` entry (`pickAbility`). `enter` on a chosen ability opens a four-field modal (`abilityMode`: name/cost/desc/requirements); on the requirements field `enter` opens a multi-select skill picker (`reqMode`). `enter` on a kin ability opens a read-only description popup (`detailMode`, dismissed by any key). `x` removes a chosen ability. `=`/`-` adjusts the stack count for HP/WP-bonus abilities. Re-adding a stackable predefined ability bumps its count instead of duplicating.
 
-Item quantities are encoded in the name string via `parseQty`/`applyQty` (e.g. `"Torch ×3"`), not a separate field.
+Heroic abilities are defined in `PredefinedHeroicAbilities` (`character.go`); kin-granted abilities come from `KinAbilities(kin)` and are derived from the character's `Kin` (not persisted, not editable). `HPBonus`/`WPBonus` are `json:"-"` and re-derived on `Load` by base name (so they are canonical, like `Skill.Attribute`); they scale by stack count and feed `AbilityHPBonus`/`AbilityWPBonus` into the HP/WP maxima. `RequirementMet` (`derived.go`) flags chosen abilities whose required skills are below level 12 (OR semantics: any one required skill suffices).
+
+Item and ability quantities are encoded in the name string via `character.ParseQty`/`ApplyQty` (e.g. `"Torch x3"`, `"Robust x2"`), not a separate field.
 
 Every mutation calls `autoSave` immediately — no manual save state or dirty flag.

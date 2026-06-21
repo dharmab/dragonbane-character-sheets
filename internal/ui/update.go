@@ -29,6 +29,22 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m.handlePickerKey(key)
 	}
 
+	if m.detailMode {
+		if key == "ctrl+c" {
+			return m, tea.Quit
+		}
+		m.detailMode = false
+		return m, nil
+	}
+
+	if m.reqMode {
+		return m.handleReqKey(key)
+	}
+
+	if m.abilityMode {
+		return m.handleAbilityKey(msg)
+	}
+
 	if m.weaknessMode {
 		return m.handleWeaknessKey(msg)
 	}
@@ -114,8 +130,8 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 					if key == "-" {
 						delta = -1
 					}
-					base, qty := parseQty(m.char.Inventory[idx].Name)
-					m.char.Inventory[idx].Name = applyQty(base, max(1, qty+delta))
+					base, qty := character.ParseQty(m.char.Inventory[idx].Name)
+					m.char.Inventory[idx].Name = character.ApplyQty(base, max(1, qty+delta))
 					m.autoSave()
 					return m, nil
 				}
@@ -157,8 +173,8 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 				if key == "-" {
 					delta = -1
 				}
-				base, qty := parseQty(m.char.TinyItems[idx])
-				m.char.TinyItems[idx] = applyQty(base, max(1, qty+delta))
+				base, qty := character.ParseQty(m.char.TinyItems[idx])
+				m.char.TinyItems[idx] = character.ApplyQty(base, max(1, qty+delta))
 				m.autoSave()
 				return m, nil
 			}
@@ -173,6 +189,66 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 				m.autoSave()
 				return m, nil
 			}
+		}
+	}
+
+	if f.section == secHeroic {
+		// Kin-granted abilities are read-only; enter shows their description.
+		if strings.HasPrefix(f.label, "kin:") {
+			if key == "a" {
+				m.openAbilityPicker()
+				return m, nil
+			}
+			if key == "enter" {
+				kin := character.KinAbilities(m.char.Kin)
+				if i := kinIndex(f.label); i >= 0 && i < len(kin) {
+					m.detailAbility = kin[i]
+					m.detailMode = true
+				}
+			}
+			return m, nil
+		}
+		switch key {
+		case "a":
+			m.openAbilityPicker()
+			return m, nil
+		case "enter":
+			idx := habIndex(f.label)
+			if idx >= 0 && idx < len(m.char.HeroicAbilities) {
+				m.startAbilityEdit(idx)
+				return m, textinput.Blink
+			}
+			return m, nil
+		case "x":
+			idx := habIndex(f.label)
+			if idx >= 0 && idx < len(m.char.HeroicAbilities) {
+				m.char.HeroicAbilities = append(m.char.HeroicAbilities[:idx], m.char.HeroicAbilities[idx+1:]...)
+				m.rebuildFields()
+				if m.focus >= len(m.fields) {
+					m.focus = len(m.fields) - 1
+				}
+				m.clampResources()
+				m.autoSave()
+				return m, nil
+			}
+		case "=", "+", "-":
+			idx := habIndex(f.label)
+			if idx < 0 || idx >= len(m.char.HeroicAbilities) {
+				return m, nil
+			}
+			delta := 1
+			if key == "-" {
+				delta = -1
+			}
+			// Only HP/WP-bonus abilities can be stacked via the "x N" name suffix.
+			a := m.char.HeroicAbilities[idx]
+			if a.HPBonus != 0 || a.WPBonus != 0 {
+				base, qty := character.ParseQty(a.Name)
+				m.char.HeroicAbilities[idx].Name = character.ApplyQty(base, max(1, qty+delta))
+				m.clampResources()
+				m.autoSave()
+			}
+			return m, nil
 		}
 	}
 
@@ -213,12 +289,18 @@ func (m Model) handlePickerKey(key string) (tea.Model, tea.Cmd) {
 	switch key {
 	case "esc", "q":
 		m.picking = false
+		m.pickAbility = false
+		m.pickEquipSource = -1
 	case "up", "k":
 		if m.pickSelected > 0 {
 			m.pickSelected--
 		}
 	case "down", "j":
-		if m.pickSelected < len(m.pickOptions)-1 {
+		limit := len(m.pickOptions) - 1
+		if m.pickAbility {
+			limit = len(m.abilityPicks) - 1 // can scroll onto unmet abilities, just not select them
+		}
+		if m.pickSelected < limit {
 			m.pickSelected++
 		}
 	case "enter":
@@ -310,6 +392,11 @@ func (m *Model) openPicker() {
 }
 
 func (m *Model) applyPickerSelection() {
+	if m.pickAbility {
+		m.applyAbilityPick()
+		m.pickAbility = false
+		return
+	}
 	if m.pickEquipSource >= 0 {
 		m.applyEquip()
 		m.pickEquipSource = -1
@@ -390,7 +477,7 @@ func (m *Model) adjustInt(delta int) {
 		m.char.Attributes[character.STR] = character.ClampAttr(m.char.Attributes[character.STR] + delta)
 	case "CON":
 		m.char.Attributes[character.CON] = character.ClampAttr(m.char.Attributes[character.CON] + delta)
-		maxHP := character.HP(m.char.Attributes[character.CON])
+		maxHP := character.HP(m.char.Attributes[character.CON]) + character.AbilityHPBonus(m.char.HeroicAbilities)
 		if m.char.CurrentHP > maxHP {
 			m.char.CurrentHP = maxHP
 		}
@@ -400,17 +487,17 @@ func (m *Model) adjustInt(delta int) {
 		m.char.Attributes[character.INT] = character.ClampAttr(m.char.Attributes[character.INT] + delta)
 	case "WIL":
 		m.char.Attributes[character.WIL] = character.ClampAttr(m.char.Attributes[character.WIL] + delta)
-		maxWP := character.WP(m.char.Attributes[character.WIL])
+		maxWP := character.WP(m.char.Attributes[character.WIL]) + character.AbilityWPBonus(m.char.HeroicAbilities)
 		if m.char.CurrentWP > maxWP {
 			m.char.CurrentWP = maxWP
 		}
 	case "CHA":
 		m.char.Attributes[character.CHA] = character.ClampAttr(m.char.Attributes[character.CHA] + delta)
 	case "currentHP":
-		maxHP := character.HP(m.char.Attributes[character.CON])
+		maxHP := character.HP(m.char.Attributes[character.CON]) + character.AbilityHPBonus(m.char.HeroicAbilities)
 		m.char.CurrentHP = max(0, min(maxHP, m.char.CurrentHP+delta))
 	case "currentWP":
-		maxWP := character.WP(m.char.Attributes[character.WIL])
+		maxWP := character.WP(m.char.Attributes[character.WIL]) + character.AbilityWPBonus(m.char.HeroicAbilities)
 		m.char.CurrentWP = max(0, min(maxWP, m.char.CurrentWP+delta))
 	default:
 		switch {
@@ -487,21 +574,246 @@ func tinyIndex(label string) int {
 	return idx
 }
 
-// parseQty splits "Rope x3" into ("Rope", 3). Returns qty=1 when no suffix.
-func parseQty(name string) (base string, qty int) {
-	if i := strings.LastIndex(name, " x"); i >= 0 {
-		if n, err := strconv.Atoi(name[i+2:]); err == nil && n >= 2 {
-			return name[:i], n
-		}
-	}
-	return name, 1
+func habIndex(label string) int {
+	var idx int
+	fmt.Sscanf(label, "hab:%d", &idx)
+	return idx
 }
 
-func applyQty(base string, qty int) string {
-	if qty <= 1 {
-		return base
+func kinIndex(label string) int {
+	var idx int
+	fmt.Sscanf(label, "kin:%d", &idx)
+	return idx
+}
+
+func (m *Model) clampResources() {
+	maxHP := character.HP(m.char.Attributes[character.CON]) + character.AbilityHPBonus(m.char.HeroicAbilities)
+	m.char.CurrentHP = max(0, min(maxHP, m.char.CurrentHP))
+	maxWP := character.WP(m.char.Attributes[character.WIL]) + character.AbilityWPBonus(m.char.HeroicAbilities)
+	m.char.CurrentWP = max(0, min(maxWP, m.char.CurrentWP))
+}
+
+// openAbilityPicker opens the picker. The first option is "Custom…"; then predefined
+// abilities whose requirements the character meets (selectable); then the rest, dimmed
+// and unselectable at the bottom. Each row shows the ability's requirements.
+func (m *Model) openAbilityPicker() {
+	const nameW = 24
+	var met, unmet []abilityPick
+	for _, h := range character.PredefinedHeroicAbilities {
+		display := h.Name
+		if label := character.RequirementLabel(h.Requirements); label != "" {
+			display = fmt.Sprintf("%-*s %s", nameW, h.Name, label)
+		}
+		ap := abilityPick{
+			name:       h.Name,
+			display:    display,
+			selectable: character.RequirementMet(m.char, h),
+		}
+		if ap.selectable {
+			met = append(met, ap)
+		} else {
+			unmet = append(unmet, ap)
+		}
 	}
-	return base + " x" + strconv.Itoa(qty)
+	picks := []abilityPick{{name: "", display: "Custom…", selectable: true}}
+	picks = append(picks, met...)
+	picks = append(picks, unmet...)
+	m.abilityPicks = picks
+	m.pickSelected = 0
+	m.pickAbility = true
+	m.picking = true
+}
+
+func (m *Model) applyAbilityPick() {
+	if m.pickSelected < 0 || m.pickSelected >= len(m.abilityPicks) {
+		return
+	}
+	pick := m.abilityPicks[m.pickSelected]
+	if !pick.selectable {
+		return
+	}
+	if pick.name == "" { // Custom…
+		m.char.HeroicAbilities = append(m.char.HeroicAbilities, character.HeroicAbility{})
+		idx := len(m.char.HeroicAbilities) - 1
+		m.rebuildFields()
+		if fi := m.fieldIndex(fmt.Sprintf("hab:%d", idx)); fi >= 0 {
+			m.focus = fi
+		}
+		m.startAbilityEdit(idx)
+		return
+	}
+	var def character.HeroicAbility
+	for _, h := range character.PredefinedHeroicAbilities {
+		if h.Name == pick.name {
+			def = h
+			break
+		}
+	}
+	// Stackable (HP/WP-bonus) abilities already present bump their count instead of
+	// adding a duplicate row.
+	if def.HPBonus != 0 || def.WPBonus != 0 {
+		for i := range m.char.HeroicAbilities {
+			if base, qty := character.ParseQty(m.char.HeroicAbilities[i].Name); base == def.Name {
+				m.char.HeroicAbilities[i].Name = character.ApplyQty(base, qty+1)
+				m.clampResources()
+				return
+			}
+		}
+	}
+	m.char.HeroicAbilities = append(m.char.HeroicAbilities, character.HeroicAbility{
+		Name:         def.Name,
+		WPCost:       def.WPCost,
+		Description:  def.Description,
+		Requirements: append([]string(nil), def.Requirements...),
+		HPBonus:      def.HPBonus,
+		WPBonus:      def.WPBonus,
+	})
+	m.rebuildFields()
+	m.clampResources()
+}
+
+func (m *Model) startAbilityEdit(idx int) {
+	m.abilityMode = true
+	m.abilityIndex = idx
+	m.abilityActive = 0
+	m.syncAbilityFocus()
+}
+
+// syncAbilityFocus focuses the text input for the active modal field (none for the
+// requirements field) and seeds it from the ability's current value.
+func (m *Model) syncAbilityFocus() {
+	a := m.char.HeroicAbilities[m.abilityIndex]
+	m.abilityName.Blur()
+	m.abilityCost.Blur()
+	m.abilityDesc.Blur()
+	switch m.abilityActive {
+	case 0:
+		m.abilityName.SetValue(a.Name)
+		m.abilityName.CursorEnd()
+		m.abilityName.Focus()
+	case 1:
+		m.abilityCost.SetValue(strconv.Itoa(a.WPCost))
+		m.abilityCost.CursorEnd()
+		m.abilityCost.Focus()
+	case 2:
+		m.abilityDesc.SetValue(a.Description)
+		m.abilityDesc.CursorEnd()
+		m.abilityDesc.Focus()
+	}
+}
+
+func (m *Model) commitCurrentAbilityField() {
+	idx := m.abilityIndex
+	if idx < 0 || idx >= len(m.char.HeroicAbilities) {
+		return
+	}
+	switch m.abilityActive {
+	case 0:
+		m.char.HeroicAbilities[idx].Name = m.abilityName.Value()
+	case 1:
+		if n, err := strconv.Atoi(strings.TrimSpace(m.abilityCost.Value())); err == nil {
+			m.char.HeroicAbilities[idx].WPCost = max(0, n)
+		} else {
+			m.char.HeroicAbilities[idx].WPCost = 0
+		}
+	case 2:
+		m.char.HeroicAbilities[idx].Description = m.abilityDesc.Value()
+	}
+}
+
+func (m *Model) closeAbilityEdit() {
+	m.abilityMode = false
+	m.abilityName.Blur()
+	m.abilityCost.Blur()
+	m.abilityDesc.Blur()
+}
+
+func (m Model) handleAbilityKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	key := msg.String()
+	switch key {
+	case "ctrl+c":
+		return m, tea.Quit
+	case "enter":
+		if m.abilityActive == 3 {
+			m.openReqPicker(m.abilityIndex)
+			return m, nil
+		}
+		m.commitCurrentAbilityField()
+		m.closeAbilityEdit()
+		m.clampResources()
+		m.autoSave()
+		return m, nil
+	case "esc":
+		m.commitCurrentAbilityField()
+		m.closeAbilityEdit()
+		m.clampResources()
+		m.autoSave()
+		return m, nil
+	case "tab":
+		m.commitCurrentAbilityField()
+		m.abilityActive = (m.abilityActive + 1) % 4
+		m.syncAbilityFocus()
+		return m, textinput.Blink
+	default:
+		var cmd tea.Cmd
+		switch m.abilityActive {
+		case 0:
+			m.abilityName, cmd = m.abilityName.Update(msg)
+		case 1:
+			m.abilityCost, cmd = m.abilityCost.Update(msg)
+		case 2:
+			m.abilityDesc, cmd = m.abilityDesc.Update(msg)
+		}
+		return m, cmd
+	}
+}
+
+// openReqPicker opens the multi-select skill list for editing ability idx's
+// requirements. It reuses pickOptions/pickSelected; reqChosen tracks the toggles.
+func (m *Model) openReqPicker(idx int) {
+	m.reqMode = true
+	m.reqIndex = idx
+	m.reqChosen = make(map[string]bool)
+	for _, r := range m.char.HeroicAbilities[idx].Requirements {
+		m.reqChosen[r] = true
+	}
+	m.pickOptions = m.pickOptions[:0]
+	for _, sk := range character.PredefinedSkills {
+		m.pickOptions = append(m.pickOptions, sk.Name)
+	}
+	m.pickSelected = 0
+}
+
+func (m Model) handleReqKey(key string) (tea.Model, tea.Cmd) {
+	switch key {
+	case "esc":
+		m.reqMode = false
+	case "up", "k":
+		if m.pickSelected > 0 {
+			m.pickSelected--
+		}
+	case "down", "j":
+		if m.pickSelected < len(m.pickOptions)-1 {
+			m.pickSelected++
+		}
+	case " ":
+		name := m.pickOptions[m.pickSelected]
+		m.reqChosen[name] = !m.reqChosen[name]
+	case "enter":
+		// Write selected skills back in predefined order for stable display.
+		var reqs []string
+		for _, sk := range character.PredefinedSkills {
+			if m.reqChosen[sk.Name] {
+				reqs = append(reqs, sk.Name)
+			}
+		}
+		if m.reqIndex >= 0 && m.reqIndex < len(m.char.HeroicAbilities) {
+			m.char.HeroicAbilities[m.reqIndex].Requirements = reqs
+		}
+		m.reqMode = false
+		m.autoSave()
+	}
+	return m, nil
 }
 
 func (m *Model) startWeaknessEdit() {

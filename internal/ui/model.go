@@ -25,6 +25,15 @@ type field struct {
 	section int
 }
 
+// abilityPick is one row in the Add Heroic Ability picker. name is the underlying
+// ability name ("" for the Custom entry); selectable is false for abilities whose
+// requirements the character does not meet (shown dimmed at the bottom).
+type abilityPick struct {
+	name       string
+	display    string
+	selectable bool
+}
+
 const (
 	secIdentity   = 0
 	secAttributes = 1
@@ -35,9 +44,10 @@ const (
 	secInventory  = 6
 	secTinyItems  = 7
 	secConditions = 8
+	secHeroic     = 9
 )
 
-const numSections = 9
+const numSections = 10
 
 type Model struct {
 	char   *character.Character
@@ -63,6 +73,23 @@ type Model struct {
 	weaknessActive int // 0 = name, 1 = description
 	weaknessName   textinput.Model
 	weaknessDesc   textinput.Model
+
+	pickAbility  bool          // true when the picker is choosing a heroic ability to add
+	abilityPicks []abilityPick // options for the ability picker (Custom first, then met, then unmet)
+
+	abilityMode   bool // ability edit modal active
+	abilityActive int  // 0 = name, 1 = cost, 2 = description, 3 = requirements
+	abilityIndex  int  // index into char.HeroicAbilities being edited
+	abilityName   textinput.Model
+	abilityCost   textinput.Model
+	abilityDesc   textinput.Model
+
+	reqMode   bool            // multi-select skill picker for an ability's requirements
+	reqIndex  int             // ability index whose requirements are being edited
+	reqChosen map[string]bool // skill name -> selected
+
+	detailMode    bool                    // read-only ability description popup
+	detailAbility character.HeroicAbility // ability shown in the detail popup
 }
 
 // visualLayout is the single source of truth for where every focusable field
@@ -124,6 +151,21 @@ func visualLayout(c *character.Character) [][]string {
 		}
 		rows = append(rows, row)
 	}
+
+	// Heroic abilities section (after skills, before gear). One focusable row per
+	// ability: kin-granted abilities (read-only) first, then chosen ones. Each row is a
+	// single field; enter shows the description (kin: read-only detail, chosen: edit modal).
+	var habRows [][]string
+	for i := range len(character.KinAbilities(c.Kin)) {
+		habRows = append(habRows, []string{fmt.Sprintf("kin:%d", i)})
+	}
+	for i := range len(c.HeroicAbilities) {
+		habRows = append(habRows, []string{fmt.Sprintf("hab:%d", i)})
+	}
+	if len(habRows) == 0 {
+		habRows = append(habRows, []string{"hab:empty"})
+	}
+	rows = append(rows, habRows...)
 
 	// Gear section
 	rows = append(rows, []string{"armor", "helmet", "wah:0", "wah:1", "wah:2"})
@@ -190,6 +232,12 @@ func fieldMetaFor(label string) field {
 		return field{kindInt, label, secInventory}
 	case strings.HasPrefix(label, "tiny:") && label != "tiny:empty":
 		return field{kindText, label, secTinyItems}
+	case strings.HasPrefix(label, "kin:"):
+		return field{kindLabel, label, secHeroic}
+	case label == "hab:empty":
+		return field{kindLabel, label, secHeroic}
+	case strings.HasPrefix(label, "hab:"):
+		return field{kindLabel, label, secHeroic}
 	case label == "inv:empty":
 		return field{kindLabel, label, secInventory}
 	case label == "tiny:empty":
@@ -250,6 +298,18 @@ func New(c *character.Character, path string) Model {
 	wd.CharLimit = 512
 	wd.Width = 60
 
+	an := textinput.New()
+	an.CharLimit = 256
+	an.Width = 40
+
+	ac := textinput.New()
+	ac.CharLimit = 4
+	ac.Width = 6
+
+	ad := textinput.New()
+	ad.CharLimit = 512
+	ad.Width = 60
+
 	fields := buildFields(c)
 	m := Model{
 		char:            c,
@@ -258,6 +318,9 @@ func New(c *character.Character, path string) Model {
 		grid:            buildGrid(c, fields),
 		weaknessName:    wn,
 		weaknessDesc:    wd,
+		abilityName:     an,
+		abilityCost:     ac,
+		abilityDesc:     ad,
 		pickEquipSource: -1,
 	}
 	m.textInput = ti
