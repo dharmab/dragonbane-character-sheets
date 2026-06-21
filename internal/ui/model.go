@@ -1,9 +1,6 @@
 package ui
 
 import (
-	"fmt"
-	"strings"
-
 	"charm.land/bubbles/v2/textinput"
 	tea "charm.land/bubbletea/v2"
 	"github.com/dharmab/dragonbane-charsheet/internal/character"
@@ -19,9 +16,80 @@ const (
 	kindLabel // non-interactive; navigation only
 )
 
+// fieldFamily identifies the kind of thing a focusable field is. Together with an
+// index (for the repeated families like skills or inventory rows) it forms a
+// fieldID — the typed replacement for the old string labels. Singleton families
+// ignore the index.
+type fieldFamily int
+
+const (
+	famNone fieldFamily = iota // zero value: not a field (gap placeholder)
+	famName
+	famAge
+	famKin
+	famProfession
+	famAttr // index → character.AttributeOrder
+	famCurrentHP
+	famCurrentWP
+	famWeaknessName
+	famRestRound
+	famRestStretch
+	famCondition  // index → conditionOrder
+	famSkillLevel // index → Character.Skills
+	famSkillAdv   // index → Character.Skills
+	famArmor
+	famHelmet
+	famWeaponAtHand // index → Character.WeaponsAtHand
+	famInvName      // index → Character.Inventory
+	famInvWeight    // index → Character.Inventory
+	famInvEmpty
+	famTiny // index → Character.TinyItems
+	famTinyEmpty
+	famKinAbility // index → KinAbilities(Character.Kin)
+	famHab        // index → Character.HeroicAbilities
+	famHabEmpty
+)
+
+// fieldID names a focusable field structurally. It is comparable, so it doubles
+// as a map key and supports == directly — no string parsing, no fmt.Sscanf.
+type fieldID struct {
+	family fieldFamily
+	index  int
+}
+
+// Constructors for the singleton and indexed field families, so layout and
+// rendering refer to fields by typed value instead of formatted strings.
+var (
+	idName         = fieldID{family: famName}
+	idAge          = fieldID{family: famAge}
+	idKin          = fieldID{family: famKin}
+	idProfession   = fieldID{family: famProfession}
+	idCurrentHP    = fieldID{family: famCurrentHP}
+	idCurrentWP    = fieldID{family: famCurrentWP}
+	idWeaknessName = fieldID{family: famWeaknessName}
+	idRestRound    = fieldID{family: famRestRound}
+	idRestStretch  = fieldID{family: famRestStretch}
+	idArmor        = fieldID{family: famArmor}
+	idHelmet       = fieldID{family: famHelmet}
+	idInvEmpty     = fieldID{family: famInvEmpty}
+	idTinyEmpty    = fieldID{family: famTinyEmpty}
+	idHabEmpty     = fieldID{family: famHabEmpty}
+)
+
+func idAttr(i int) fieldID         { return fieldID{famAttr, i} }
+func idCondition(i int) fieldID    { return fieldID{famCondition, i} }
+func idSkillLevel(i int) fieldID   { return fieldID{famSkillLevel, i} }
+func idSkillAdv(i int) fieldID     { return fieldID{famSkillAdv, i} }
+func idWeaponAtHand(i int) fieldID { return fieldID{famWeaponAtHand, i} }
+func idInvName(i int) fieldID      { return fieldID{famInvName, i} }
+func idInvWeight(i int) fieldID    { return fieldID{famInvWeight, i} }
+func idTiny(i int) fieldID         { return fieldID{famTiny, i} }
+func idKinAbility(i int) fieldID   { return fieldID{famKinAbility, i} }
+func idHab(i int) fieldID          { return fieldID{famHab, i} }
+
 type field struct {
+	id      fieldID
 	kind    fieldKind
-	label   string
 	section int
 }
 
@@ -47,8 +115,11 @@ const (
 	secHeroic     = 9
 )
 
-const numSections = 10
-
+// Model mixes value and pointer receivers by necessity: bubbletea's tea.Model
+// requires value-receiver Init/Update/View, while the mutating helpers take a
+// pointer receiver.
+//
+//nolint:recvcheck // see above
 type Model struct {
 	char   *character.Character
 	path   string
@@ -57,9 +128,10 @@ type Model struct {
 	width  int
 	height int
 
-	focus  int
-	fields []field
-	grid   [][]int // grid[row][col] = index into fields; mirrors visualLayout
+	focus    int
+	fields   []field
+	grid     [][]int         // grid[row][col] = index into fields; mirrors visualLayout
+	fieldIdx map[fieldID]int // id → index into fields, for O(1) fieldIndex lookups
 
 	editing   bool
 	textInput textinput.Model
@@ -95,17 +167,21 @@ type Model struct {
 // visualLayout is the single source of truth for where every focusable field
 // appears on screen. Row/column positions here must match what view.go renders.
 // Both the navigation grid and the renderer are derived from this.
-func visualLayout(c *character.Character) [][]string {
-	rows := [][]string{
+func visualLayout(c *character.Character) [][]fieldID {
+	gap := fieldID{} // famNone: gap placeholder, never focusable
+	// Capacity is a safe over-estimate: identity/attribute/gear rows plus one row
+	// per skill, ability, inventory, and tiny item.
+	rows := make([][]fieldID, 0, 6+len(c.Skills)+len(c.HeroicAbilities)+len(c.Inventory)+len(c.TinyItems))
+	rows = append(rows,
 		// Identity row
-		{"Name", "Age", "Kin", "Profession", "weakness:name", "rest:round", "rest:stretch"},
+		[]fieldID{idName, idAge, idKin, idProfession, idWeaknessName, idRestRound, idRestStretch},
 		// Attributes (left, cols 0-1), Derived (middle, cols 2-3), Conditions (right, cols 4-5).
-		// Conditions stay in cols 4-5 on every row so vertical navigation lines up; the empty
-		// strings are gap placeholders for the derived column, which only has fields on row 0.
-		{"STR", "INT", "currentHP", "currentWP", "cond:exhausted", "cond:angry"},
-		{"CON", "WIL", "", "", "cond:sickly", "cond:scared"},
-		{"AGL", "CHA", "", "", "cond:dazed", "cond:disheartened"},
-	}
+		// Conditions stay in cols 4-5 on every row so vertical navigation lines up; the gaps
+		// are placeholders for the derived column, which only has fields on row 0.
+		[]fieldID{idAttr(0), idAttr(3), idCurrentHP, idCurrentWP, idCondition(0), idCondition(1)},
+		[]fieldID{idAttr(1), idAttr(4), gap, gap, idCondition(2), idCondition(3)},
+		[]fieldID{idAttr(2), idAttr(5), gap, gap, idCondition(4), idCondition(5)},
+	)
 	var generalIdx, weaponIdx []int
 	for i, sk := range c.Skills {
 		if sk.Weapon {
@@ -114,37 +190,28 @@ func visualLayout(c *character.Character) [][]string {
 			generalIdx = append(generalIdx, i)
 		}
 	}
-	skillPairRows := func(indices []int) [][]string {
+	skillPairRows := func(indices []int) [][]fieldID {
 		n := len(indices)
 		nRows := (n + 1) / 2
-		var result [][]string
+		result := make([][]fieldID, 0, nRows)
 		for r := range nRows {
 			a := indices[r]
-			row := []string{
-				fmt.Sprintf("skill:%d:level", a),
-				fmt.Sprintf("skill:%d:adv", a),
-			}
+			row := []fieldID{idSkillLevel(a), idSkillAdv(a)}
 			if ri := r + nRows; ri < n {
 				b := indices[ri]
-				row = append(row,
-					fmt.Sprintf("skill:%d:level", b),
-					fmt.Sprintf("skill:%d:adv", b),
-				)
+				row = append(row, idSkillLevel(b), idSkillAdv(b))
 			}
 			result = append(result, row)
 		}
 		return result
 	}
 	genRows := skillPairRows(generalIdx)
-	var weapRows [][]string
+	weapRows := make([][]fieldID, 0, len(weaponIdx))
 	for _, i := range weaponIdx {
-		weapRows = append(weapRows, []string{
-			fmt.Sprintf("skill:%d:level", i),
-			fmt.Sprintf("skill:%d:adv", i),
-		})
+		weapRows = append(weapRows, []fieldID{idSkillLevel(i), idSkillAdv(i)})
 	}
 	for r := range max(len(genRows), len(weapRows)) {
-		var row []string
+		var row []fieldID
 		if r < len(genRows) {
 			row = append(row, genRows[r]...)
 		}
@@ -157,42 +224,42 @@ func visualLayout(c *character.Character) [][]string {
 	// Heroic abilities section (after skills, before gear). One focusable row per
 	// ability: kin-granted abilities (read-only) first, then chosen ones. Each row is a
 	// single field; enter shows the description (kin: read-only detail, chosen: edit modal).
-	var habRows [][]string
+	var habRows [][]fieldID
 	for i := range len(character.KinAbilities(c.Kin)) {
-		habRows = append(habRows, []string{fmt.Sprintf("kin:%d", i)})
+		habRows = append(habRows, []fieldID{idKinAbility(i)})
 	}
 	for i := range len(c.HeroicAbilities) {
-		habRows = append(habRows, []string{fmt.Sprintf("hab:%d", i)})
+		habRows = append(habRows, []fieldID{idHab(i)})
 	}
 	if len(habRows) == 0 {
-		habRows = append(habRows, []string{"hab:empty"})
+		habRows = append(habRows, []fieldID{idHabEmpty})
 	}
 	rows = append(rows, habRows...)
 
 	// Gear section
-	rows = append(rows, []string{"armor", "helmet", "wah:0", "wah:1", "wah:2"})
+	rows = append(rows, []fieldID{idArmor, idHelmet, idWeaponAtHand(0), idWeaponAtHand(1), idWeaponAtHand(2)})
 	// Inventory and tiny items rendered side by side.
-	var invRows [][]string
+	var invRows [][]fieldID
 	if len(c.Inventory) == 0 {
-		invRows = append(invRows, []string{"inv:empty"})
+		invRows = append(invRows, []fieldID{idInvEmpty})
 	} else {
 		for i := range len(c.Inventory) {
-			invRows = append(invRows, []string{
-				fmt.Sprintf("inv:%d:name", i),
-				fmt.Sprintf("inv:%d:weight", i),
-			})
+			// Weight renders to the left of the name (see viewInventory), so it must
+			// come first here too — visualLayout is the source of truth for left/right
+			// navigation order.
+			invRows = append(invRows, []fieldID{idInvWeight(i), idInvName(i)})
 		}
 	}
-	var tinyRows [][]string
+	var tinyRows [][]fieldID
 	if len(c.TinyItems) == 0 {
-		tinyRows = append(tinyRows, []string{"tiny:empty"})
+		tinyRows = append(tinyRows, []fieldID{idTinyEmpty})
 	} else {
 		for i := range len(c.TinyItems) {
-			tinyRows = append(tinyRows, []string{fmt.Sprintf("tiny:%d", i)})
+			tinyRows = append(tinyRows, []fieldID{idTiny(i)})
 		}
 	}
 	for r := range max(len(invRows), len(tinyRows)) {
-		var row []string
+		var row []fieldID
 		if r < len(invRows) {
 			row = append(row, invRows[r]...)
 		}
@@ -205,83 +272,77 @@ func visualLayout(c *character.Character) [][]string {
 	return rows
 }
 
-// fieldMetaFor returns the kind and section for a field label.
-func fieldMetaFor(label string) field {
-	switch label {
-	case "Name":
-		return field{kindText, label, secIdentity}
-	case "Kin", "Profession", "Age":
-		return field{kindEnum, label, secIdentity}
-	case "STR", "CON", "AGL", "INT", "WIL", "CHA":
-		return field{kindInt, label, secAttributes}
-	case "currentHP", "currentWP":
-		return field{kindInt, label, secResources}
-	case "weakness:name":
-		return field{kindText, label, secWeakness}
-	case "armor", "helmet":
-		return field{kindText, label, secGear}
+// metaFor returns the interaction kind and section for a field id.
+func metaFor(id fieldID) field {
+	mk := func(k fieldKind, sec int) field { return field{id: id, kind: k, section: sec} }
+	switch id.family {
+	case famName:
+		return mk(kindText, secIdentity)
+	case famAge, famKin, famProfession:
+		return mk(kindEnum, secIdentity)
+	case famAttr:
+		return mk(kindInt, secAttributes)
+	case famCurrentHP, famCurrentWP:
+		return mk(kindInt, secResources)
+	case famWeaknessName:
+		return mk(kindText, secWeakness)
+	case famRestRound, famRestStretch:
+		return mk(kindBool, secIdentity)
+	case famCondition:
+		return mk(kindBool, secConditions)
+	case famSkillLevel:
+		return mk(kindInt, secSkills)
+	case famSkillAdv:
+		return mk(kindBool, secSkills)
+	case famArmor, famHelmet, famWeaponAtHand:
+		return mk(kindText, secGear)
+	case famInvName:
+		return mk(kindText, secInventory)
+	case famInvWeight:
+		return mk(kindInt, secInventory)
+	case famInvEmpty:
+		return mk(kindLabel, secInventory)
+	case famTiny:
+		return mk(kindText, secTinyItems)
+	case famTinyEmpty:
+		return mk(kindLabel, secTinyItems)
+	case famKinAbility, famHab, famHabEmpty:
+		return mk(kindLabel, secHeroic)
+	default:
+		return field{id: id}
 	}
-	switch {
-	case strings.HasSuffix(label, ":level"):
-		return field{kindInt, label, secSkills}
-	case strings.HasSuffix(label, ":adv"):
-		return field{kindBool, label, secSkills}
-	case strings.HasPrefix(label, "wah:"):
-		return field{kindText, label, secGear}
-	case strings.HasPrefix(label, "inv:") && strings.HasSuffix(label, ":name"):
-		return field{kindText, label, secInventory}
-	case strings.HasPrefix(label, "inv:") && strings.HasSuffix(label, ":weight"):
-		return field{kindInt, label, secInventory}
-	case strings.HasPrefix(label, "tiny:") && label != "tiny:empty":
-		return field{kindText, label, secTinyItems}
-	case strings.HasPrefix(label, "kin:"):
-		return field{kindLabel, label, secHeroic}
-	case label == "hab:empty":
-		return field{kindLabel, label, secHeroic}
-	case strings.HasPrefix(label, "hab:"):
-		return field{kindLabel, label, secHeroic}
-	case label == "inv:empty":
-		return field{kindLabel, label, secInventory}
-	case label == "tiny:empty":
-		return field{kindLabel, label, secTinyItems}
-	case strings.HasPrefix(label, "cond:"):
-		return field{kindBool, label, secConditions}
-	case label == "rest:round" || label == "rest:stretch":
-		return field{kindBool, label, secIdentity}
-	}
-	return field{label: label}
 }
 
 func buildFields(c *character.Character) []field {
 	layout := visualLayout(c)
-	seen := map[string]struct{}{}
+	seen := map[fieldID]struct{}{}
 	var fields []field
 	for _, row := range layout {
-		for _, label := range row {
-			if label == "" { // gap placeholder; never focusable
+		for _, id := range row {
+			if id.family == famNone { // gap placeholder; never focusable
 				continue
 			}
-			if _, ok := seen[label]; ok {
+			if _, ok := seen[id]; ok {
 				continue
 			}
-			seen[label] = struct{}{}
-			fields = append(fields, fieldMetaFor(label))
+			seen[id] = struct{}{}
+			fields = append(fields, metaFor(id))
 		}
 	}
 	return fields
 }
 
 func buildGrid(c *character.Character, fields []field) [][]int {
-	idx := make(map[string]int, len(fields))
+	idx := make(map[fieldID]int, len(fields))
 	for i, f := range fields {
-		idx[f.label] = i
+		idx[f.id] = i
 	}
 	layout := visualLayout(c)
 	grid := make([][]int, len(layout))
 	for r, row := range layout {
 		grid[r] = make([]int, len(row))
-		for c, label := range row {
-			if fi, ok := idx[label]; ok {
+		for c, id := range row {
+			if fi, ok := idx[id]; ok {
 				grid[r][c] = fi
 			} else {
 				grid[r][c] = -1
@@ -315,12 +376,9 @@ func New(c *character.Character, path string) Model {
 	ad.CharLimit = 512
 	ad.SetWidth(60)
 
-	fields := buildFields(c)
 	m := Model{
 		char:            c,
 		path:            path,
-		fields:          fields,
-		grid:            buildGrid(c, fields),
 		weaknessName:    wn,
 		weaknessDesc:    wd,
 		abilityName:     an,
@@ -329,21 +387,31 @@ func New(c *character.Character, path string) Model {
 		pickEquipSource: -1,
 	}
 	m.textInput = ti
+	m.rebuildFields()
 	return m
 }
 
 func (m *Model) rebuildFields() {
 	m.fields = buildFields(m.char)
 	m.grid = buildGrid(m.char, m.fields)
+	m.fieldIdx = make(map[fieldID]int, len(m.fields))
+	for i, f := range m.fields {
+		m.fieldIdx[f.id] = i
+	}
 }
 
-func (m Model) Init() tea.Cmd { return nil }
+func (Model) Init() tea.Cmd { return nil }
 
 func (m Model) currentField() field {
 	if m.focus >= 0 && m.focus < len(m.fields) {
 		return m.fields[m.focus]
 	}
 	return field{}
+}
+
+// focused reports whether the field with the given id is the one in focus.
+func (m Model) focused(id fieldID) bool {
+	return m.fieldIndex(id) == m.focus
 }
 
 func (m Model) currentPos() (row, col int) {
@@ -381,49 +449,58 @@ func (m *Model) moveGrid(drow, dcol int) {
 	}
 }
 
-func (m Model) sectionFirstField(sec int) int {
-	for i, f := range m.fields {
-		if f.section == sec {
-			return i
-		}
-	}
-	return -1
+// enumField describes an enum-valued identity field: its ordered options and how
+// to read and write the character's current value. It is the single source of
+// truth shared by the picker (enumOptions) and the commit (applyPickerSelection).
+type enumField struct {
+	options []string
+	get     func(*character.Character) string
+	set     func(*character.Character, string)
 }
 
-func (m Model) sectionLastField(sec int) int {
-	last := -1
-	for i, f := range m.fields {
-		if f.section == sec {
-			last = i
-		}
+func toStrings[T ~string](xs []T) []string {
+	out := make([]string, len(xs))
+	for i, x := range xs {
+		out[i] = string(x)
 	}
-	return last
+	return out
+}
+
+func enumFieldFor(fam fieldFamily) (enumField, bool) {
+	switch fam {
+	case famKin:
+		return enumField{
+			options: toStrings(character.AllKins),
+			get:     func(c *character.Character) string { return string(c.Kin) },
+			set:     func(c *character.Character, v string) { c.Kin = character.Kin(v) },
+		}, true
+	case famProfession:
+		return enumField{
+			options: toStrings(character.AllProfessions),
+			get:     func(c *character.Character) string { return string(c.Profession) },
+			set:     func(c *character.Character, v string) { c.Profession = character.Profession(v) },
+		}, true
+	case famAge:
+		return enumField{
+			options: toStrings(character.AllAges),
+			get:     func(c *character.Character) string { return string(c.Age) },
+			set:     func(c *character.Character, v string) { c.Age = character.Age(v) },
+		}, true
+	default:
+		return enumField{}, false
+	}
 }
 
 func (m Model) enumOptions() (options []string, current int) {
-	f := m.currentField()
-	switch f.label {
-	case "Kin":
-		for i, v := range character.AllKins {
-			options = append(options, string(v))
-			if v == m.char.Kin {
-				current = i
-			}
-		}
-	case "Profession":
-		for i, v := range character.AllProfessions {
-			options = append(options, string(v))
-			if v == m.char.Profession {
-				current = i
-			}
-		}
-	case "Age":
-		for i, v := range character.AllAges {
-			options = append(options, string(v))
-			if v == m.char.Age {
-				current = i
-			}
+	ef, ok := enumFieldFor(m.currentField().id.family)
+	if !ok {
+		return nil, 0
+	}
+	cur := ef.get(m.char)
+	for i, opt := range ef.options {
+		if opt == cur {
+			current = i
 		}
 	}
-	return
+	return ef.options, current
 }

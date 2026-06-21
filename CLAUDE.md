@@ -10,37 +10,42 @@ go test ./...                                     # all tests
 go test ./internal/character/                     # character package tests only
 go test -run TestMovement ./internal/character/   # single test
 go vet ./...                                       # static analysis
+go tool golangci-lint run ./...                    # lint (pinned via go.mod tool directive)
 go run . <character.json>                          # run the TUI (path required; created on save if missing)
 ```
+
+golangci-lint is pinned as a `go tool` (see the `tool` directive in `go.mod`), so `go tool golangci-lint` uses the repo's exact version. Config is `.golangci.yaml`. The tree is lint-clean; keep it that way.
 
 ## Architecture
 
 A Bubble Tea TUI over two packages plus `main.go` (arg parsing, `character.Load`, launch).
 
 **`internal/character`** — pure data, no UI dependency
-- `character.go`: `Character` struct and nested types (`Skill`, `Weakness`, `Item`, `Conditions`), enums (`Kin`, `Profession`, `Age`, `Attribute`), `PredefinedSkills`, `Load`/`Save` (JSON), `Default()`, `ClampAttr`.
-- `derived.go`: stateless functions (`Movement`, `DamageBonus`, `HP`, `WP`, `InventorySlots`, `UsedSlots`) — no side effects, fully tested.
+- `character.go`: `Character` struct and nested types (`Skill`, `Weakness`, `Item`, `Conditions`), enums (`Kin`, `Profession`, `Age`, `Attribute`), skill-name constants (`Skill*`), `CoreSkills`, `Load`/`Save` (JSON), `Default()`, `ClampAttr`, `ParseAttribute`.
+- `derived.go`: stateless functions (`Movement`, `DamageBonus`, `HP`, `WP`, `InventorySlots`, `UsedSlots`) and `Character` methods (`MaxHP`, `MaxWP`, `ClampResources`) — no side effects, fully tested.
 
 **`internal/ui`** — Bubble Tea model split across three files
-- `model.go`: `Model` struct, `visualLayout`, `fieldMetaFor`, `buildFields`, `buildGrid`, navigation (`moveGrid`).
+- `model.go`: `Model` struct, `fieldID`/`fieldFamily` identity, `visualLayout`, `metaFor`, `buildFields`, `buildGrid`, navigation (`moveGrid`).
 - `update.go`: `Update` — key handling, all mutations, `autoSave` after every change.
 - `view.go`: `View` — lipgloss rendering, picker/weakness modals, per-section view helpers, field value helpers (`ftext`, `fenum`, `fnum`, `fbool`).
 
 ## Skills
 
-Skills are predefined in `PredefinedSkills` (`character.go`), split into general and weapon skills (`Weapon` flag). `Load` merges the predefined set into any loaded character: missing skills are added (level 5), and `Attribute`/`Weapon` are always re-derived from the predefined definitions (they are `json:"-"`, not persisted). The layout renders general skills in paired columns and weapon skills in their own column.
+Skills are predefined in `CoreSkills` (`character.go`), split into general and weapon skills (`Weapon` flag). Skill names are `Skill*` constants (e.g. `SkillAxes`), shared by `CoreSkills`, the weapon-skill requirement groups, and heroic ability requirements so a requirement can never name a non-existent skill. `Load` merges the core set into any loaded character: missing skills are added (level `UntrainedSkillLevel`), and `Attribute`/`Weapon` are always re-derived from the core definitions (they are `json:"-"`, not persisted). The layout renders general skills in paired columns and weapon skills in their own column.
 
 ## Layout/Navigation Invariant
 
-`visualLayout` in `model.go` is the **single source of truth** for where focusable fields appear on screen. It returns `[][]string` of field labels in screen order (row, then column). The navigation grid (`buildGrid`) is derived from it automatically; `view.go` rendering must be kept in sync **manually**.
+`visualLayout` in `model.go` is the **single source of truth** for where focusable fields appear on screen. It returns `[][]fieldID` in screen order (row, then column). The navigation grid (`buildGrid`) is derived from it automatically; `view.go` rendering must be kept in sync **manually**.
 
-When adding or moving a field: update `visualLayout`, update `fieldMetaFor` (kind + section), and update the matching rendering in `view.go`.
+When adding or moving a field: update `visualLayout`, update `metaFor` (kind + section for the family), and update the matching rendering in `view.go`.
 
-Fields are identified throughout by string labels — plain (`"STR"`, `"currentHP"`, `"armor"`) or structured (`"skill:2:level"`, `"inv:0:weight"`, `"wah:1"`, `"cond:dazed"`, `"rest:round"`). `fieldMetaFor` maps a label to its `field{kind, section}`.
+Fields are identified by a typed `fieldID{family fieldFamily, index int}` — no string labels, no parsing. Singleton families have constructors (`idName`, `idArmor`, …); indexed families have `idAttr(i)`, `idSkillLevel(i)`, `idInvName(i)`, `idHab(i)`, `idCondition(i)`, etc. `metaFor(id)` maps a family to its `field{id, kind, section}`. The gap placeholder is the zero `fieldID{}` (`famNone`). `fieldIndex`/`focused` resolve an id to the focused field via the `fieldIdx` map maintained by `rebuildFields`.
 
-Field kinds (`fieldKind`): `kindText`, `kindEnum`, `kindInt`, `kindBool`, `kindLabel` (non-interactive; navigation only, e.g. `inv:empty`).
+Field kinds (`fieldKind`): `kindText`, `kindEnum`, `kindInt`, `kindBool`, `kindLabel` (non-interactive; navigation only, e.g. `famInvEmpty`).
 
-Sections (`numSections` = 10): `secIdentity`, `secAttributes`, `secResources`, `secSkills`, `secWeakness`, `secGear`, `secInventory`, `secTinyItems`, `secConditions`, `secHeroic`.
+Sections (10): `secIdentity`, `secAttributes`, `secResources`, `secSkills`, `secWeakness`, `secGear`, `secInventory`, `secTinyItems`, `secConditions`, `secHeroic`.
+
+Conditions are data-driven by `conditionOrder` (`update.go`), shared by `toggleBool` and the conditions rendering. Key names are constants (`keyEnter`, `keyAdd`, `keyDonDoff`, …) in `update.go`.
 
 ## Interaction Model
 

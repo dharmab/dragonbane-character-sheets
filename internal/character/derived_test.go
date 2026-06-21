@@ -3,6 +3,7 @@ package character
 import "testing"
 
 func TestMovement(t *testing.T) {
+	t.Parallel()
 	cases := []struct {
 		kin  Kin
 		agl  int
@@ -38,6 +39,7 @@ func TestMovement(t *testing.T) {
 }
 
 func TestDamageBonus(t *testing.T) {
+	t.Parallel()
 	cases := []struct {
 		v    int
 		want string
@@ -58,6 +60,7 @@ func TestDamageBonus(t *testing.T) {
 }
 
 func TestHPWP(t *testing.T) {
+	t.Parallel()
 	if HP(14) != 14 {
 		t.Error("HP(14) should be 14")
 	}

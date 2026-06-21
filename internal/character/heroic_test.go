@@ -6,6 +6,7 @@ import (
 )
 
 func TestAbilityBonuses(t *testing.T) {
+	t.Parallel()
 	if got := AbilityHPBonus(nil); got != 0 {
 		t.Errorf("AbilityHPBonus(nil) = %d; want 0", got)
 	}
@@ -24,6 +25,7 @@ func TestAbilityBonuses(t *testing.T) {
 }
 
 func TestKinAbilities(t *testing.T) {
+	t.Parallel()
 	counts := map[Kin]int{
 		Human:    1,
 		Halfling: 1,
@@ -49,10 +51,11 @@ func TestKinAbilities(t *testing.T) {
 }
 
 func TestRequirementMet(t *testing.T) {
+	t.Parallel()
 	c := &Character{Skills: []Skill{
-		{Name: "Bows", Level: 5},       // untrained
-		{Name: "Crossbows", Level: 12}, // trained
-		{Name: "Knives", Level: 5},     // untrained
+		{Name: SkillBows, Level: 5},       // untrained
+		{Name: SkillCrossbows, Level: 12}, // trained
+		{Name: SkillKnives, Level: 5},     // untrained
 	}}
 	cases := []struct {
 		name string
@@ -60,10 +63,10 @@ func TestRequirementMet(t *testing.T) {
 		want bool
 	}{
 		{"no requirement", nil, true},
-		{"single trained", []string{"Crossbows"}, true},
-		{"single untrained", []string{"Bows"}, false},
-		{"or set, one trained", []string{"Bows", "Crossbows"}, true},
-		{"or set, none trained", []string{"Bows", "Knives"}, false},
+		{"single trained", []string{SkillCrossbows}, true},
+		{"single untrained", []string{SkillBows}, false},
+		{"or set, one trained", []string{SkillBows, SkillCrossbows}, true},
+		{"or set, none trained", []string{SkillBows, SkillKnives}, false},
 	}
 	for _, tc := range cases {
 		got := RequirementMet(c, HeroicAbility{Requirements: tc.reqs})
@@ -74,6 +77,7 @@ func TestRequirementMet(t *testing.T) {
 }
 
 func TestLoadHeroicAbilities(t *testing.T) {
+	t.Parallel()
 	path := filepath.Join(t.TempDir(), "hero.json")
 	c := Default()
 	c.Attributes[CON] = 12

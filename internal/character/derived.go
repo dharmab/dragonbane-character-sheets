@@ -53,6 +53,25 @@ func HP(con int) int { return con }
 // WP returns the willpower point maximum (= WIL).
 func WP(wil int) int { return wil }
 
+// MaxHP is the character's hit-point maximum: base HP from CON plus any
+// heroic-ability bonuses.
+func (c *Character) MaxHP() int {
+	return HP(c.Attributes[CON]) + AbilityHPBonus(c.HeroicAbilities)
+}
+
+// MaxWP is the character's willpower-point maximum: base WP from WIL plus any
+// heroic-ability bonuses.
+func (c *Character) MaxWP() int {
+	return WP(c.Attributes[WIL]) + AbilityWPBonus(c.HeroicAbilities)
+}
+
+// ClampResources clamps CurrentHP and CurrentWP into [0, max] for their
+// respective maxima. Call it after any change to CON, WIL, or heroic abilities.
+func (c *Character) ClampResources() {
+	c.CurrentHP = max(0, min(c.MaxHP(), c.CurrentHP))
+	c.CurrentWP = max(0, min(c.MaxWP(), c.CurrentWP))
+}
+
 // InventorySlots returns the number of inventory slots (= ceil(STR/2)).
 func InventorySlots(str int) int { return (str + 1) / 2 }
 

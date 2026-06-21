@@ -12,13 +12,27 @@ import (
 
 const fallbackWidth = 80
 
+// unnamed is the placeholder shown for an item or ability with an empty name.
+const unnamed = "(unnamed)"
+
 var (
-	sHdr  = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("214"))
-	sDim  = lipgloss.NewStyle().Foreground(lipgloss.Color("240"))
-	sSel  = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("196"))
-	sEdit = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("118"))
-	sCol  = lipgloss.NewStyle().Foreground(lipgloss.Color("240"))
-	sWarn = lipgloss.NewStyle().Foreground(lipgloss.Color("196"))
+	colorHeader = lipgloss.Color("214") // orange section headers
+	colorDim    = lipgloss.Color("240") // dividers, hints, secondary text
+	colorEdit   = lipgloss.Color("118") // active inline text input
+	colorWarn   = lipgloss.Color("196") // unmet requirements, over-capacity
+)
+
+var (
+	sHdr = lipgloss.NewStyle().Bold(true).Foreground(colorHeader)
+	sDim = lipgloss.NewStyle().Foreground(colorDim)
+	// Selection is shown as a reverse-video highlight rather than added "[ … ]"
+	// brackets: brackets change the character count, which shifts every field to
+	// the right of the selection out of alignment. Reverse video marks the field
+	// in place without changing its width.
+	sSel  = lipgloss.NewStyle().Reverse(true).Bold(true)
+	sEdit = lipgloss.NewStyle().Bold(true).Foreground(colorEdit)
+	sCol  = lipgloss.NewStyle().Foreground(colorDim)
+	sWarn = lipgloss.NewStyle().Foreground(colorWarn)
 )
 
 func (m Model) View() tea.View {
@@ -131,20 +145,19 @@ func (m Model) viewPicker() string {
 	if m.pickEquipSource >= 0 {
 		name := m.char.Inventory[m.pickEquipSource].Name
 		if name == "" {
-			name = "(unnamed)"
+			name = unnamed
 		}
 		title = "  Equip to slot: " + name
 	} else {
-		f := m.currentField()
-		switch f.label {
-		case "Kin":
+		switch m.currentField().id.family {
+		case famKin:
 			title = "  Select Kin"
-		case "Profession":
+		case famProfession:
 			title = "  Select Profession"
-		case "Age":
+		case famAge:
 			title = "  Select Age"
 		default:
-			title = "  Select Attribute"
+			title = "  Select"
 		}
 	}
 
@@ -171,13 +184,13 @@ func (m Model) viewIdentity() string {
 		weaknessName = "(none)"
 	}
 	return fmt.Sprintf(" Name: %s   Age: %s   Kin: %s   Profession: %s   Weakness: %s   %s   %s\n",
-		m.ftext("Name", m.char.Name),
-		m.fenum("Age", string(m.char.Age)),
-		m.fenum("Kin", string(m.char.Kin)),
-		m.fenum("Profession", string(m.char.Profession)),
-		m.ftext("weakness:name", weaknessName),
-		m.fbool("rest:round", "Used Round Rest", m.char.RoundRestUsed),
-		m.fbool("rest:stretch", "Used Stretch Rest", m.char.StretchRestUsed),
+		m.ftext(idName, m.char.Name),
+		m.fenum(idAge, string(m.char.Age)),
+		m.fenum(idKin, string(m.char.Kin)),
+		m.fenum(idProfession, string(m.char.Profession)),
+		m.ftext(idWeaknessName, weaknessName),
+		m.fbool(idRestRound, "Used Round Rest", m.char.RoundRestUsed),
+		m.fbool(idRestStretch, "Used Stretch Rest", m.char.StretchRestUsed),
 	)
 }
 
@@ -211,46 +224,45 @@ func (m Model) viewAttrResources(w int) string {
 
 	attrLines := []string{
 		sHdr.Render(" ATTRIBUTES"),
-		m.attrRow(character.STR, character.INT),
-		m.attrRow(character.CON, character.WIL),
-		m.attrRow(character.AGL, character.CHA),
+		m.attrRow(0, 3), // STR | INT
+		m.attrRow(1, 4), // CON | WIL
+		m.attrRow(2, 5), // AGL | CHA
 	}
 
 	agl := m.char.Attributes[character.AGL]
 	str := m.char.Attributes[character.STR]
-	con := m.char.Attributes[character.CON]
-	wil := m.char.Attributes[character.WIL]
-	maxHP := character.HP(con) + character.AbilityHPBonus(m.char.HeroicAbilities)
-	maxWP := character.WP(wil) + character.AbilityWPBonus(m.char.HeroicAbilities)
+	maxHP := m.char.MaxHP()
+	maxWP := m.char.MaxWP()
 
 	derivedLines := []string{
-		sHdr.Render("DERIVED"),
+		sHdr.Render(" DERIVED"),
 		fmt.Sprintf(" HP %s / %d   WP %s / %d",
-			m.fnum("currentHP", m.char.CurrentHP), maxHP,
-			m.fnum("currentWP", m.char.CurrentWP), maxWP),
+			m.fnum(idCurrentHP, m.char.CurrentHP), maxHP,
+			m.fnum(idCurrentWP, m.char.CurrentWP), maxWP),
 		fmt.Sprintf(" Movement: %dm", character.Movement(m.char.Kin, agl)),
 		fmt.Sprintf(" STR Bonus: %s   AGL Bonus: %s",
 			character.DamageBonus(str),
 			character.DamageBonus(agl)),
 	}
 
-	conds := m.char.Conditions
+	// Conditions render two per row, in conditionOrder (the same order toggleBool
+	// and visualLayout use): (0,1), (2,3), (4,5).
 	condLeft := lipgloss.NewStyle().Width(16)
-	condPair := func(l1, n1 string, v1 bool, l2, n2 string, v2 bool) string {
-		return " " + condLeft.Render(m.fbool(l1, n1, v1)) + m.fbool(l2, n2, v2)
-	}
-	condLines := []string{
-		sHdr.Render("CONDITIONS"),
-		condPair("cond:exhausted", "Exhausted", conds.Exhausted, "cond:angry", "Angry", conds.Angry),
-		condPair("cond:sickly", "Sickly", conds.Sickly, "cond:scared", "Scared", conds.Scared),
-		condPair("cond:dazed", "Dazed", conds.Dazed, "cond:disheartened", "Disheartened", conds.Disheartened),
+	condLines := make([]string, 0, 1+len(conditionOrder)/2)
+	condLines = append(condLines, sHdr.Render(" CONDITIONS"))
+	for r := range len(conditionOrder) / 2 {
+		li, ri := 2*r, 2*r+1
+		lc, rc := conditionOrder[li], conditionOrder[ri]
+		condLines = append(condLines, " "+
+			condLeft.Render(m.fbool(idCondition(li), lc.name, *lc.ptr(m.char)))+
+			m.fbool(idCondition(ri), rc.name, *rc.ptr(m.char)))
 	}
 
 	leftCol := lipgloss.NewStyle().Width(leftWidth)
 	midCol := lipgloss.NewStyle().Width(midWidth)
 	div := sCol.Render("│")
-	var lines []string
 	n := max(max(len(attrLines), len(derivedLines)), len(condLines))
+	lines := make([]string, 0, n)
 	for i := range n {
 		l, mid, r := "", "", ""
 		if i < len(attrLines) {
@@ -267,40 +279,45 @@ func (m Model) viewAttrResources(w int) string {
 	return strings.Join(lines, "\n") + "\n"
 }
 
-func (m Model) attrRow(a1, a2 character.Attribute) string {
-	return fmt.Sprintf(" %s %-8s  %s %s",
-		a1, m.fnum(string(a1), m.char.Attributes[a1]),
-		a2, m.fnum(string(a2), m.char.Attributes[a2]),
+// attrRow renders two attributes side by side; i1 and i2 index character.AttributeOrder.
+func (m Model) attrRow(i1, i2 int) string {
+	a1, a2 := character.AttributeOrder[i1], character.AttributeOrder[i2]
+	// Width-2 cell (attributes are 3–18), right-aligned so the second column
+	// stays put whether the first value is one or two digits.
+	cell := lipgloss.NewStyle().Width(2).Align(lipgloss.Right)
+	return fmt.Sprintf(" %s %s   %s %s",
+		a1, cell.Render(m.fnum(idAttr(i1), m.char.Attributes[a1])),
+		a2, m.fnum(idAttr(i2), m.char.Attributes[a2]),
 	)
 }
 
 func (m Model) viewSkills(w int) string {
-	const nameW = 20
+	const nameW, lvlW = 20, 3
 	nameCol := lipgloss.NewStyle().Width(nameW)
-	lvlCol := lipgloss.NewStyle().Width(6)
+	lvlCol := lipgloss.NewStyle().Width(lvlW).Align(lipgloss.Right)
 	div := "  " + sCol.Render("│") + "  "
-	colHdr := sDim.Render(fmt.Sprintf(" %-*s %-3s  %-6s %-3s", nameW, "Name", "Atr", "Lvl", "Adv"))
-	pairHdr := colHdr + div + sDim.Render(fmt.Sprintf("%-*s %-3s  %-6s %-3s", nameW, "Name", "Atr", "Lvl", "Adv"))
+	colHdrStr := fmt.Sprintf(" %-*s %-3s  %*s  %-3s", nameW, "Name", "Atr", lvlW, "Lvl", "Adv")
+	colHdr := sDim.Render(colHdrStr)
+	pairHdr := colHdr + div + sDim.Render(strings.TrimPrefix(colHdrStr, " "))
 
 	skillCell := func(i int) string {
 		sk := m.char.Skills[i]
-		lvlLabel := fmt.Sprintf("skill:%d:level", i)
-		advLabel := fmt.Sprintf("skill:%d:adv", i)
-		lvlStr := m.fnum(lvlLabel, sk.Level)
+		lvlStr := m.fnum(idSkillLevel(i), sk.Level)
 		adv := "[ ]"
 		if sk.Advanced {
 			adv = "[x]"
 		}
-		if m.fieldIndex(advLabel) == m.focus {
+		if m.focused(idSkillAdv(i)) {
 			adv = sSel.Render(adv)
 		}
-		return nameCol.Render(sk.Name) + " " + string(sk.Attribute) + "  " + lvlCol.Render(lvlStr) + " " + adv
+		return nameCol.Render(sk.Name) + " " + string(sk.Attribute) + "  " + lvlCol.Render(lvlStr) + "  " + adv
 	}
 
 	renderSection := func(title string, indices []int) []string {
-		slines := []string{sHdr.Render(title), pairHdr}
 		n := len(indices)
 		nRows := (n + 1) / 2
+		slines := make([]string, 0, 2+nRows)
+		slines = append(slines, sHdr.Render(title), pairHdr)
 		for r := range nRows {
 			row := " " + skillCell(indices[r])
 			if ri := r + nRows; ri < n {
@@ -329,7 +346,8 @@ func (m Model) viewSkills(w int) string {
 		return strings.Join(genLines, "\n") + "\n"
 	}
 	weapLines := func() []string {
-		slines := []string{sHdr.Render(" WEAPON SKILLS"), colHdr}
+		slines := make([]string, 0, 2+len(weapon))
+		slines = append(slines, sHdr.Render(" WEAPON SKILLS"), colHdr)
 		for _, i := range weapon {
 			slines = append(slines, " "+skillCell(i))
 		}
@@ -354,7 +372,7 @@ func (m Model) viewSkills(w int) string {
 }
 
 func (m Model) viewGear() string {
-	var lines []string
+	lines := make([]string, 0, 3)
 	lines = append(lines, sHdr.Render(" GEAR"))
 
 	armor := m.char.Armor
@@ -365,22 +383,20 @@ func (m Model) viewGear() string {
 	if helmet == "" {
 		helmet = "—"
 	}
-	var wahParts []string
+	wahParts := make([]string, 0, 3)
 	for i := range 3 {
-		label := fmt.Sprintf("wah:%d", i)
-		val := ""
+		display := ""
 		if i < len(m.char.WeaponsAtHand) {
-			val = m.char.WeaponsAtHand[i]
+			display = m.char.WeaponsAtHand[i]
 		}
-		display := val
 		if display == "" {
 			display = "—"
 		}
-		wahParts = append(wahParts, m.ftext(label, display))
+		wahParts = append(wahParts, m.ftext(idWeaponAtHand(i), display))
 	}
 	lines = append(lines, fmt.Sprintf(" Armor: %s   Helmet: %s   Weapons: %s",
-		m.ftext("armor", armor),
-		m.ftext("helmet", helmet),
+		m.ftext(idArmor, armor),
+		m.ftext(idHelmet, helmet),
 		strings.Join(wahParts, "  ")))
 	lines = append(lines, sDim.Render(" d doff equipped item → inventory"))
 
@@ -393,7 +409,7 @@ func (m Model) viewInventoryAndTiny(w int) string {
 	tinyLines := strings.Split(strings.TrimRight(m.viewTinyItems(), "\n"), "\n")
 	invCol := lipgloss.NewStyle().Width(invWidth)
 	div := sCol.Render("│")
-	var lines []string
+	lines := make([]string, 0, max(len(invLines), len(tinyLines)))
 	for i := range max(len(invLines), len(tinyLines)) {
 		l, r := "", ""
 		if i < len(invLines) {
@@ -414,7 +430,7 @@ func (m Model) viewInventory() string {
 
 	slotInfo := fmt.Sprintf("%d/%d slots", used, maxSlots)
 	if used > maxSlots {
-		slotInfo = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("196")).Render(
+		slotInfo = lipgloss.NewStyle().Bold(true).Foreground(colorWarn).Render(
 			fmt.Sprintf("%d/%d slots (OVER)", used, maxSlots))
 	}
 
@@ -422,19 +438,19 @@ func (m Model) viewInventory() string {
 	lines = append(lines, sHdr.Render(" INVENTORY")+"  "+slotInfo)
 
 	if len(m.char.Inventory) == 0 {
-		lines = append(lines, " "+m.ftext("inv:empty", "(no items — press 'a' to add)"))
+		lines = append(lines, " "+m.ftext(idInvEmpty, "(no items — press 'a' to add)"))
 	} else {
-		lines = append(lines, sDim.Render(fmt.Sprintf(" %-32s %s", "Item", "Wt")))
+		// Weight first in a narrow right-aligned column, then the name takes the
+		// rest of the row.
+		wtCol := lipgloss.NewStyle().Width(2).Align(lipgloss.Right)
+		lines = append(lines, sDim.Render(fmt.Sprintf(" %2s  %s", "Wt", "Item")))
 		for i, it := range m.char.Inventory {
-			nameLabel := fmt.Sprintf("inv:%d:name", i)
-			weightLabel := fmt.Sprintf("inv:%d:weight", i)
 			name := it.Name
 			if name == "" {
-				name = "(unnamed)"
+				name = unnamed
 			}
-			nameCell := lipgloss.NewStyle().Width(32).Render(m.ftext(nameLabel, name))
-			weightCell := m.fnum(weightLabel, it.Weight)
-			lines = append(lines, " "+nameCell+" "+weightCell)
+			weightCell := wtCol.Render(m.fnum(idInvWeight(i), it.Weight))
+			lines = append(lines, " "+weightCell+"  "+m.ftext(idInvName(i), name))
 		}
 		lines = append(lines, sDim.Render(" a add   x remove   d don item → gear slot"))
 	}
@@ -446,15 +462,14 @@ func (m Model) viewTinyItems() string {
 	var lines []string
 	lines = append(lines, sHdr.Render(" TINY ITEMS"))
 	if len(m.char.TinyItems) == 0 {
-		lines = append(lines, " "+m.ftext("tiny:empty", "(none — press 'a' to add)"))
+		lines = append(lines, " "+m.ftext(idTinyEmpty, "(none — press 'a' to add)"))
 	} else {
 		for i, name := range m.char.TinyItems {
-			label := fmt.Sprintf("tiny:%d", i)
 			display := name
 			if display == "" {
-				display = "(unnamed)"
+				display = unnamed
 			}
-			lines = append(lines, " "+m.ftext(label, display))
+			lines = append(lines, " "+m.ftext(idTiny(i), display))
 		}
 		lines = append(lines, sDim.Render(" a add   x remove"))
 	}
@@ -462,45 +477,45 @@ func (m Model) viewTinyItems() string {
 }
 
 func (m Model) viewHeroicAbilities() string {
-	const nameW, costW = 24, 4
+	const nameW, costW = 24, 2
 	nameCol := lipgloss.NewStyle().Width(nameW)
-	costCol := lipgloss.NewStyle().Width(costW)
+	costCol := lipgloss.NewStyle().Width(costW).Align(lipgloss.Right)
 
 	var lines []string
 	lines = append(lines, sHdr.Render(" HEROIC ABILITIES"))
-	lines = append(lines, sDim.Render(fmt.Sprintf("   %-*s %-*s %s", nameW, "Name", costW, "WP", "Requires")))
+	lines = append(lines, sDim.Render(fmt.Sprintf(" %-*s %*s  %s", nameW, "Name", costW, "WP", "Requires")))
 
-	// row renders one ability line. label is the field used for focus highlighting.
-	row := func(label, name string, cost int, reqs []string, met bool) {
+	// row renders one ability line. id is the field used for focus highlighting.
+	row := func(id fieldID, name string, cost int, reqs []string, met bool) {
 		costStr := "—"
 		if cost > 0 {
-			costStr = fmt.Sprintf("%d", cost)
+			costStr = strconv.Itoa(cost)
 		}
 		reqCell := character.RequirementLabel(reqs)
-		marker := " "
 		if !met {
-			marker = sWarn.Render("!")
-			reqCell = sWarn.Render(reqCell)
+			// Flag an unmet requirement in place (red, with a "!") rather than with
+			// a left-margin marker, so ability names align with every other section.
+			reqCell = sWarn.Render("! " + reqCell)
 		}
 		nameCell := nameCol.Render(name)
-		if m.fieldIndex(label) == m.focus {
+		if m.focused(id) {
 			nameCell = sSel.Render(nameCol.Render(name))
 		}
-		lines = append(lines, marker+" "+nameCell+" "+costCol.Render(costStr)+" "+reqCell)
+		lines = append(lines, " "+nameCell+" "+costCol.Render(costStr)+"  "+reqCell)
 	}
 
 	for i, a := range character.KinAbilities(m.char.Kin) {
-		row(fmt.Sprintf("kin:%d", i), a.Name, a.WPCost, nil, true)
+		row(idKinAbility(i), a.Name, a.WPCost, nil, true)
 	}
 	for i, a := range m.char.HeroicAbilities {
 		name := a.Name
 		if name == "" {
-			name = "(unnamed)"
+			name = unnamed
 		}
-		row(fmt.Sprintf("hab:%d", i), name, a.WPCost, a.Requirements, character.RequirementMet(m.char, a))
+		row(idHab(i), name, a.WPCost, a.Requirements, character.RequirementMet(m.char, a))
 	}
 	if len(character.KinAbilities(m.char.Kin)) == 0 && len(m.char.HeroicAbilities) == 0 {
-		lines = append(lines, " "+m.ftext("hab:empty", "(none — press 'a' to add)"))
+		lines = append(lines, " "+m.ftext(idHabEmpty, "(none — press 'a' to add)"))
 	}
 
 	lines = append(lines, sDim.Render(" a add   x remove   enter view/edit   =/- stack"))
@@ -516,7 +531,7 @@ func (m Model) viewAbilityDetail() string {
 	b.WriteString(sep + "\n")
 	cost := "—"
 	if a.WPCost > 0 {
-		cost = fmt.Sprintf("%d", a.WPCost)
+		cost = strconv.Itoa(a.WPCost)
 	}
 	b.WriteString(" WP Cost: " + cost + "\n")
 	if label := character.RequirementLabel(a.Requirements); label != "" {
@@ -642,50 +657,45 @@ func (m Model) viewStatus() string {
 	return line + "\n" + hint + "\n"
 }
 
-func (m Model) ftext(label, raw string) string {
-	fi := m.fieldIndex(label)
-	if fi != m.focus {
+func (m Model) ftext(id fieldID, raw string) string {
+	if !m.focused(id) {
 		return raw
 	}
 	if m.editing {
 		return sEdit.Render(m.textInput.View())
 	}
-	return sSel.Render("[ " + raw + " ]")
+	return sSel.Render(raw)
 }
 
-func (m Model) fenum(label, raw string) string {
-	fi := m.fieldIndex(label)
-	if fi == m.focus {
-		return sSel.Render("‹ " + raw + " ›")
+func (m Model) fenum(id fieldID, raw string) string {
+	if m.focused(id) {
+		return sSel.Render(raw)
 	}
 	return raw
 }
 
-func (m Model) fnum(label string, v int) string {
-	fi := m.fieldIndex(label)
-	s := fmt.Sprintf("%d", v)
-	if fi == m.focus {
-		return sSel.Render("[ " + s + " ]")
+func (m Model) fnum(id fieldID, v int) string {
+	s := strconv.Itoa(v)
+	if m.focused(id) {
+		return sSel.Render(s)
 	}
 	return s
 }
 
-func (m Model) fbool(label, name string, val bool) string {
+func (m Model) fbool(id fieldID, name string, val bool) string {
 	check := "[ ] " + name
 	if val {
 		check = "[x] " + name
 	}
-	if m.fieldIndex(label) == m.focus {
+	if m.focused(id) {
 		return sSel.Render(check)
 	}
 	return check
 }
 
-func (m Model) fieldIndex(label string) int {
-	for i, f := range m.fields {
-		if f.label == label {
-			return i
-		}
+func (m Model) fieldIndex(id fieldID) int {
+	if i, ok := m.fieldIdx[id]; ok {
+		return i
 	}
 	return -1
 }

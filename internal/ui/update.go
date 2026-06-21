@@ -10,6 +10,36 @@ import (
 	"github.com/dharmab/dragonbane-charsheet/internal/character"
 )
 
+// Key names as reported by bubbletea's KeyPressMsg.String(), used in the key
+// switches below.
+const (
+	keyUp    = "up"
+	keyDown  = "down"
+	keyLeft  = "left"
+	keyRight = "right"
+	keyEnter = "enter"
+	keyEsc   = "esc"
+	keyTab   = "tab"
+	keySpace = "space"
+	keyQuit  = "ctrl+c"
+	keySave  = "ctrl+s"
+
+	// vim-style navigation aliases.
+	keyVimUp    = "k"
+	keyVimDown  = "j"
+	keyVimLeft  = "h"
+	keyVimRight = "l"
+
+	// Action keys.
+	keyQuitAlt = "q" // quit alias
+	keyAdd     = "a" // add a row (inventory, tiny item, ability)
+	keyRemove  = "x" // remove a row
+	keyDonDoff = "d" // don/doff between gear and inventory
+	keyIncr    = "=" // increment a number / quantity
+	keyIncrAlt = "+" // increment alias
+	keyDecr    = "-" // decrement a number / quantity
+)
+
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
@@ -30,7 +60,7 @@ func (m Model) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	}
 
 	if m.detailMode {
-		if key == "ctrl+c" {
+		if key == keyQuit {
 			return m, tea.Quit
 		}
 		m.detailMode = false
@@ -51,7 +81,7 @@ func (m Model) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 
 	if m.editing {
 		switch key {
-		case "enter", "esc":
+		case keyEnter, keyEsc:
 			m.commitText()
 			m.editing = false
 			m.textInput.Blur()
@@ -64,92 +94,74 @@ func (m Model) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	}
 
 	switch key {
-	case "ctrl+c", "q":
+	case keyQuit, keyQuitAlt:
 		return m, tea.Quit
-	case "ctrl+s":
+	case keySave:
 		m.autoSave()
 		return m, nil
-	case "up", "k":
+	case keyUp, keyVimUp:
 		m.moveGrid(-1, 0)
 		return m, nil
-	case "down", "j":
+	case keyDown, keyVimDown:
 		m.moveGrid(+1, 0)
 		return m, nil
-	case "left", "h":
+	case keyLeft, keyVimLeft:
 		m.moveGrid(0, -1)
 		return m, nil
-	case "right", "l":
+	case keyRight, keyVimRight:
 		m.moveGrid(0, +1)
 		return m, nil
 	}
 
 	f := m.currentField()
 
-	if f.section == secGear {
-		if key == "d" {
-			switch {
-			case f.label == "armor" && m.char.Armor != "":
-				m.char.Inventory = append(m.char.Inventory, character.Item{Name: m.char.Armor, Weight: 1})
-				m.char.Armor = ""
-				m.rebuildFields()
-				m.autoSave()
+	if f.section == secGear && key == keyDonDoff {
+		switch f.id.family {
+		case famArmor:
+			if m.char.Armor != "" {
+				m.stowGear(&m.char.Armor)
 				return m, nil
-			case f.label == "helmet" && m.char.Helmet != "":
-				m.char.Inventory = append(m.char.Inventory, character.Item{Name: m.char.Helmet, Weight: 1})
-				m.char.Helmet = ""
-				m.rebuildFields()
-				m.autoSave()
-				return m, nil
-			default:
-				if strings.HasPrefix(f.label, "wah:") {
-					wi := wahIndex(f.label)
-					if wi >= 0 && wi < len(m.char.WeaponsAtHand) && m.char.WeaponsAtHand[wi] != "" {
-						m.char.Inventory = append(m.char.Inventory, character.Item{Name: m.char.WeaponsAtHand[wi], Weight: 1})
-						m.char.WeaponsAtHand[wi] = ""
-						m.rebuildFields()
-						m.autoSave()
-						return m, nil
-					}
-				}
 			}
+		case famHelmet:
+			if m.char.Helmet != "" {
+				m.stowGear(&m.char.Helmet)
+				return m, nil
+			}
+		case famWeaponAtHand:
+			if wi := f.id.index; wi >= 0 && wi < len(m.char.WeaponsAtHand) && m.char.WeaponsAtHand[wi] != "" {
+				m.stowGear(&m.char.WeaponsAtHand[wi])
+				return m, nil
+			}
+		default: // other gear fields: nothing to stow
 		}
 	}
 
 	if f.section == secInventory {
+		idx := f.id.index
+		inBounds := idx >= 0 && idx < len(m.char.Inventory)
 		switch key {
-		case "a":
+		case keyAdd:
 			m.char.Inventory = append(m.char.Inventory, character.Item{Name: "", Weight: 1})
 			m.rebuildFields()
 			m.autoSave()
 			return m, nil
-		case "=", "+", "-":
-			if strings.HasSuffix(f.label, ":name") {
-				idx := invIndex(f.label)
-				if idx >= 0 && idx < len(m.char.Inventory) {
-					delta := 1
-					if key == "-" {
-						delta = -1
-					}
-					base, qty := character.ParseQty(m.char.Inventory[idx].Name)
-					m.char.Inventory[idx].Name = character.ApplyQty(base, max(1, qty+delta))
-					m.autoSave()
-					return m, nil
-				}
-			}
-		case "x":
-			idx := invIndex(f.label)
-			if idx >= 0 && idx < len(m.char.Inventory) {
-				m.char.Inventory = append(m.char.Inventory[:idx], m.char.Inventory[idx+1:]...)
-				m.rebuildFields()
-				if m.focus >= len(m.fields) {
-					m.focus = len(m.fields) - 1
-				}
+		case keyIncr, keyIncrAlt, keyDecr:
+			if f.id.family == famInvName && inBounds {
+				base, qty := character.ParseQty(m.char.Inventory[idx].Name)
+				m.char.Inventory[idx].Name = character.ApplyQty(base, max(1, qty+signOf(key)))
 				m.autoSave()
 				return m, nil
 			}
-		case "d":
-			idx := invIndex(f.label)
-			if idx >= 0 && idx < len(m.char.Inventory) {
+		case keyRemove:
+			if inBounds {
+				m.char.Inventory = append(m.char.Inventory[:idx], m.char.Inventory[idx+1:]...)
+				m.rebuildFields()
+				m.clampFocus()
+				m.autoSave()
+				return m, nil
+			}
+		case keyDonDoff:
+			if inBounds {
 				m.pickEquipSource = idx
 				m.pickOptions = m.equipSlotOptions()
 				m.pickSelected = 0
@@ -160,32 +172,26 @@ func (m Model) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	}
 
 	if f.section == secTinyItems {
+		idx := f.id.index
+		inBounds := idx >= 0 && idx < len(m.char.TinyItems)
 		switch key {
-		case "a":
+		case keyAdd:
 			m.char.TinyItems = append(m.char.TinyItems, "")
 			m.rebuildFields()
 			m.autoSave()
 			return m, nil
-		case "=", "+", "-":
-			idx := tinyIndex(f.label)
-			if idx >= 0 && idx < len(m.char.TinyItems) {
-				delta := 1
-				if key == "-" {
-					delta = -1
-				}
+		case keyIncr, keyIncrAlt, keyDecr:
+			if inBounds {
 				base, qty := character.ParseQty(m.char.TinyItems[idx])
-				m.char.TinyItems[idx] = character.ApplyQty(base, max(1, qty+delta))
+				m.char.TinyItems[idx] = character.ApplyQty(base, max(1, qty+signOf(key)))
 				m.autoSave()
 				return m, nil
 			}
-		case "x":
-			idx := tinyIndex(f.label)
-			if idx >= 0 && idx < len(m.char.TinyItems) {
+		case keyRemove:
+			if inBounds {
 				m.char.TinyItems = append(m.char.TinyItems[:idx], m.char.TinyItems[idx+1:]...)
 				m.rebuildFields()
-				if m.focus >= len(m.fields) {
-					m.focus = len(m.fields) - 1
-				}
+				m.clampFocus()
 				m.autoSave()
 				return m, nil
 			}
@@ -194,58 +200,50 @@ func (m Model) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 
 	if f.section == secHeroic {
 		// Kin-granted abilities are read-only; enter shows their description.
-		if strings.HasPrefix(f.label, "kin:") {
-			if key == "a" {
+		if f.id.family == famKinAbility {
+			switch key {
+			case keyAdd:
 				m.openAbilityPicker()
-				return m, nil
-			}
-			if key == "enter" {
+			case keyEnter:
 				kin := character.KinAbilities(m.char.Kin)
-				if i := kinIndex(f.label); i >= 0 && i < len(kin) {
+				if i := f.id.index; i >= 0 && i < len(kin) {
 					m.detailAbility = kin[i]
 					m.detailMode = true
 				}
 			}
 			return m, nil
 		}
+		idx := f.id.index
+		inBounds := idx >= 0 && idx < len(m.char.HeroicAbilities)
 		switch key {
-		case "a":
+		case keyAdd:
 			m.openAbilityPicker()
 			return m, nil
-		case "enter":
-			idx := habIndex(f.label)
-			if idx >= 0 && idx < len(m.char.HeroicAbilities) {
+		case keyEnter:
+			if inBounds {
 				m.startAbilityEdit(idx)
 				return m, textinput.Blink
 			}
 			return m, nil
-		case "x":
-			idx := habIndex(f.label)
-			if idx >= 0 && idx < len(m.char.HeroicAbilities) {
+		case keyRemove:
+			if inBounds {
 				m.char.HeroicAbilities = append(m.char.HeroicAbilities[:idx], m.char.HeroicAbilities[idx+1:]...)
 				m.rebuildFields()
-				if m.focus >= len(m.fields) {
-					m.focus = len(m.fields) - 1
-				}
-				m.clampResources()
+				m.clampFocus()
+				m.char.ClampResources()
 				m.autoSave()
 				return m, nil
 			}
-		case "=", "+", "-":
-			idx := habIndex(f.label)
-			if idx < 0 || idx >= len(m.char.HeroicAbilities) {
+		case keyIncr, keyIncrAlt, keyDecr:
+			if !inBounds {
 				return m, nil
-			}
-			delta := 1
-			if key == "-" {
-				delta = -1
 			}
 			// Only HP/WP-bonus abilities can be stacked via the "x N" name suffix.
 			a := m.char.HeroicAbilities[idx]
 			if a.HPBonus != 0 || a.WPBonus != 0 {
 				base, qty := character.ParseQty(a.Name)
-				m.char.HeroicAbilities[idx].Name = character.ApplyQty(base, max(1, qty+delta))
-				m.clampResources()
+				m.char.HeroicAbilities[idx].Name = character.ApplyQty(base, max(1, qty+signOf(key)))
+				m.char.ClampResources()
 				m.autoSave()
 			}
 			return m, nil
@@ -254,8 +252,8 @@ func (m Model) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 
 	switch f.kind {
 	case kindText:
-		if key == "enter" {
-			if f.label == "weakness:name" {
+		if key == keyEnter {
+			if f.id.family == famWeaknessName {
 				m.startWeaknessEdit()
 				return m, textinput.Blink
 			}
@@ -263,23 +261,24 @@ func (m Model) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 			return m, textinput.Blink
 		}
 	case kindEnum:
-		if key == "enter" {
+		if key == keyEnter {
 			m.openPicker()
 		}
 	case kindInt:
 		switch key {
-		case "=", "+":
+		case keyIncr, keyIncrAlt:
 			m.adjustInt(+1)
 			m.autoSave()
-		case "-":
+		case keyDecr:
 			m.adjustInt(-1)
 			m.autoSave()
 		}
 	case kindBool:
-		if key == "space" {
+		if key == keySpace {
 			m.toggleBool()
 			m.autoSave()
 		}
+	default: // kindLabel: not interactive
 	}
 
 	return m, nil
@@ -287,15 +286,15 @@ func (m Model) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 
 func (m Model) handlePickerKey(key string) (tea.Model, tea.Cmd) {
 	switch key {
-	case "esc", "q":
+	case keyEsc, keyQuitAlt:
 		m.picking = false
 		m.pickAbility = false
 		m.pickEquipSource = -1
-	case "up", "k":
+	case keyUp, keyVimUp:
 		if m.pickSelected > 0 {
 			m.pickSelected--
 		}
-	case "down", "j":
+	case keyDown, keyVimDown:
 		limit := len(m.pickOptions) - 1
 		if m.pickAbility {
 			limit = len(m.abilityPicks) - 1 // can scroll onto unmet abilities, just not select them
@@ -303,10 +302,14 @@ func (m Model) handlePickerKey(key string) (tea.Model, tea.Cmd) {
 		if m.pickSelected < limit {
 			m.pickSelected++
 		}
-	case "enter":
+	case keyEnter:
 		m.applyPickerSelection()
 		m.picking = false
 		m.autoSave()
+		// Picking "Custom…" opens the ability edit modal; start its cursor blinking.
+		if m.abilityMode {
+			return m, textinput.Blink
+		}
 	}
 	return m, nil
 }
@@ -316,70 +319,51 @@ func (m *Model) startEditing() {
 	m.textInput.Focus()
 	m.textInput.SetValue(m.textFieldValue())
 	m.textInput.CursorEnd()
-	m.textInput.SetWidth(m.textInputWidth())
+	m.textInput.SetWidth(textInputWidth)
 }
 
-func (m *Model) textInputWidth() int {
-	return 28
+// textInputWidth is the on-screen width of the inline single-field text editor.
+const textInputWidth = 28
+
+// textFieldValue returns the pointer to the string the focused text field edits,
+// or nil if the focused field is not an editable text field. textFieldValue and
+// commitText both go through it so reading and writing can never disagree.
+func (m *Model) textFieldTarget() *string {
+	f := m.currentField()
+	switch f.id.family {
+	case famName:
+		return &m.char.Name
+	case famArmor:
+		return &m.char.Armor
+	case famHelmet:
+		return &m.char.Helmet
+	case famWeaponAtHand:
+		if i := f.id.index; i >= 0 && i < len(m.char.WeaponsAtHand) {
+			return &m.char.WeaponsAtHand[i]
+		}
+	case famInvName:
+		if i := f.id.index; i >= 0 && i < len(m.char.Inventory) {
+			return &m.char.Inventory[i].Name
+		}
+	case famTiny:
+		if i := f.id.index; i >= 0 && i < len(m.char.TinyItems) {
+			return &m.char.TinyItems[i]
+		}
+	default: // not an editable text field
+	}
+	return nil
 }
 
 func (m *Model) textFieldValue() string {
-	f := m.currentField()
-	switch f.label {
-	case "Name":
-		return m.char.Name
-	case "armor":
-		return m.char.Armor
-	case "helmet":
-		return m.char.Helmet
-	}
-	switch {
-	case strings.HasPrefix(f.label, "wah:"):
-		idx := wahIndex(f.label)
-		if idx >= 0 && idx < len(m.char.WeaponsAtHand) {
-			return m.char.WeaponsAtHand[idx]
-		}
-	case strings.HasPrefix(f.label, "inv:") && strings.HasSuffix(f.label, ":name"):
-		idx := invIndex(f.label)
-		if idx >= 0 && idx < len(m.char.Inventory) {
-			return m.char.Inventory[idx].Name
-		}
-	case strings.HasPrefix(f.label, "tiny:"):
-		idx := tinyIndex(f.label)
-		if idx >= 0 && idx < len(m.char.TinyItems) {
-			return m.char.TinyItems[idx]
-		}
+	if p := m.textFieldTarget(); p != nil {
+		return *p
 	}
 	return ""
 }
 
 func (m *Model) commitText() {
-	f := m.currentField()
-	switch f.label {
-	case "Name":
-		m.char.Name = m.textInput.Value()
-	case "armor":
-		m.char.Armor = m.textInput.Value()
-	case "helmet":
-		m.char.Helmet = m.textInput.Value()
-	default:
-		switch {
-		case strings.HasPrefix(f.label, "wah:"):
-			idx := wahIndex(f.label)
-			if idx >= 0 && idx < len(m.char.WeaponsAtHand) {
-				m.char.WeaponsAtHand[idx] = m.textInput.Value()
-			}
-		case strings.HasPrefix(f.label, "inv:") && strings.HasSuffix(f.label, ":name"):
-			idx := invIndex(f.label)
-			if idx >= 0 && idx < len(m.char.Inventory) {
-				m.char.Inventory[idx].Name = m.textInput.Value()
-			}
-		case strings.HasPrefix(f.label, "tiny:"):
-			idx := tinyIndex(f.label)
-			if idx >= 0 && idx < len(m.char.TinyItems) {
-				m.char.TinyItems[idx] = m.textInput.Value()
-			}
-		}
+	if p := m.textFieldTarget(); p != nil {
+		*p = m.textInput.Value()
 	}
 	m.autoSave()
 }
@@ -403,14 +387,8 @@ func (m *Model) applyPickerSelection() {
 		return
 	}
 	chosen := m.pickOptions[m.pickSelected]
-	f := m.currentField()
-	switch f.label {
-	case "Kin":
-		m.char.Kin = character.Kin(chosen)
-	case "Profession":
-		m.char.Profession = character.Profession(chosen)
-	case "Age":
-		m.char.Age = character.Age(chosen)
+	if ef, ok := enumFieldFor(m.currentField().id.family); ok {
+		ef.set(m.char, chosen)
 	}
 }
 
@@ -423,10 +401,8 @@ func (m *Model) equipSlotOptions() []string {
 	if helmet == "" {
 		helmet = "—"
 	}
-	opts := []string{
-		"Armor: " + armor,
-		"Helmet: " + helmet,
-	}
+	opts := make([]string, 0, 2+len(m.char.WeaponsAtHand))
+	opts = append(opts, "Armor: "+armor, "Helmet: "+helmet)
 	for i, w := range m.char.WeaponsAtHand {
 		val := w
 		if val == "" {
@@ -472,73 +448,61 @@ func (m *Model) applyEquip() {
 
 func (m *Model) adjustInt(delta int) {
 	f := m.currentField()
-	switch f.label {
-	case "STR":
-		m.char.Attributes[character.STR] = character.ClampAttr(m.char.Attributes[character.STR] + delta)
-	case "CON":
-		m.char.Attributes[character.CON] = character.ClampAttr(m.char.Attributes[character.CON] + delta)
-		maxHP := character.HP(m.char.Attributes[character.CON]) + character.AbilityHPBonus(m.char.HeroicAbilities)
-		if m.char.CurrentHP > maxHP {
-			m.char.CurrentHP = maxHP
+	switch f.id.family {
+	case famAttr:
+		// Changing CON or WIL moves the HP/WP maxima, so always re-clamp resources;
+		// for the other attributes the clamp is a harmless no-op.
+		attr := character.AttributeOrder[f.id.index]
+		m.char.Attributes[attr] = character.ClampAttr(m.char.Attributes[attr] + delta)
+		m.char.ClampResources()
+	case famCurrentHP:
+		m.char.CurrentHP = max(0, min(m.char.MaxHP(), m.char.CurrentHP+delta))
+	case famCurrentWP:
+		m.char.CurrentWP = max(0, min(m.char.MaxWP(), m.char.CurrentWP+delta))
+	case famSkillLevel:
+		if i := f.id.index; i >= 0 && i < len(m.char.Skills) {
+			m.char.Skills[i].Level = max(0, m.char.Skills[i].Level+delta)
 		}
-	case "AGL":
-		m.char.Attributes[character.AGL] = character.ClampAttr(m.char.Attributes[character.AGL] + delta)
-	case "INT":
-		m.char.Attributes[character.INT] = character.ClampAttr(m.char.Attributes[character.INT] + delta)
-	case "WIL":
-		m.char.Attributes[character.WIL] = character.ClampAttr(m.char.Attributes[character.WIL] + delta)
-		maxWP := character.WP(m.char.Attributes[character.WIL]) + character.AbilityWPBonus(m.char.HeroicAbilities)
-		if m.char.CurrentWP > maxWP {
-			m.char.CurrentWP = maxWP
+	case famInvWeight:
+		if i := f.id.index; i >= 0 && i < len(m.char.Inventory) {
+			m.char.Inventory[i].Weight = max(1, m.char.Inventory[i].Weight+delta)
 		}
-	case "CHA":
-		m.char.Attributes[character.CHA] = character.ClampAttr(m.char.Attributes[character.CHA] + delta)
-	case "currentHP":
-		maxHP := character.HP(m.char.Attributes[character.CON]) + character.AbilityHPBonus(m.char.HeroicAbilities)
-		m.char.CurrentHP = max(0, min(maxHP, m.char.CurrentHP+delta))
-	case "currentWP":
-		maxWP := character.WP(m.char.Attributes[character.WIL]) + character.AbilityWPBonus(m.char.HeroicAbilities)
-		m.char.CurrentWP = max(0, min(maxWP, m.char.CurrentWP+delta))
-	default:
-		switch {
-		case strings.HasPrefix(f.label, "skill:"):
-			idx := skillIndex(f.label)
-			if idx >= 0 && idx < len(m.char.Skills) {
-				m.char.Skills[idx].Level = max(0, m.char.Skills[idx].Level+delta)
-			}
-		case strings.HasPrefix(f.label, "inv:") && strings.HasSuffix(f.label, ":weight"):
-			idx := invIndex(f.label)
-			if idx >= 0 && idx < len(m.char.Inventory) {
-				m.char.Inventory[idx].Weight = max(1, m.char.Inventory[idx].Weight+delta)
-			}
-		}
+	default: // not a numeric field
 	}
+}
+
+// conditionOrder lists the six conditions in the order they appear in
+// visualLayout and on screen, pairing each with its display name and a pointer
+// accessor. It is the single source for both rendering and toggling.
+var conditionOrder = []struct {
+	name string
+	ptr  func(*character.Character) *bool
+}{
+	{"Exhausted", func(c *character.Character) *bool { return &c.Conditions.Exhausted }},
+	{"Angry", func(c *character.Character) *bool { return &c.Conditions.Angry }},
+	{"Sickly", func(c *character.Character) *bool { return &c.Conditions.Sickly }},
+	{"Scared", func(c *character.Character) *bool { return &c.Conditions.Scared }},
+	{"Dazed", func(c *character.Character) *bool { return &c.Conditions.Dazed }},
+	{"Disheartened", func(c *character.Character) *bool { return &c.Conditions.Disheartened }},
 }
 
 func (m *Model) toggleBool() {
 	f := m.currentField()
-	switch {
-	case strings.HasPrefix(f.label, "skill:"):
-		idx := skillIndex(f.label)
-		if idx >= 0 && idx < len(m.char.Skills) {
-			m.char.Skills[idx].Advanced = !m.char.Skills[idx].Advanced
+	switch f.id.family {
+	case famSkillAdv:
+		if i := f.id.index; i >= 0 && i < len(m.char.Skills) {
+			m.char.Skills[i].Advanced = !m.char.Skills[i].Advanced
 		}
-	case f.label == "cond:exhausted":
-		m.char.Conditions.Exhausted = !m.char.Conditions.Exhausted
-	case f.label == "cond:sickly":
-		m.char.Conditions.Sickly = !m.char.Conditions.Sickly
-	case f.label == "cond:dazed":
-		m.char.Conditions.Dazed = !m.char.Conditions.Dazed
-	case f.label == "cond:angry":
-		m.char.Conditions.Angry = !m.char.Conditions.Angry
-	case f.label == "cond:scared":
-		m.char.Conditions.Scared = !m.char.Conditions.Scared
-	case f.label == "cond:disheartened":
-		m.char.Conditions.Disheartened = !m.char.Conditions.Disheartened
-	case f.label == "rest:round":
+	case famCondition:
+		if i := f.id.index; i >= 0 && i < len(conditionOrder) {
+			p := conditionOrder[i].ptr(m.char)
+			*p = !*p
+		}
+	case famRestRound:
 		m.char.RoundRestUsed = !m.char.RoundRestUsed
-	case f.label == "rest:stretch":
+	case famRestStretch:
 		m.char.StretchRestUsed = !m.char.StretchRestUsed
+	default: // not a boolean field
 	}
 }
 
@@ -550,47 +514,27 @@ func (m *Model) autoSave() {
 	}
 }
 
-func skillIndex(label string) int {
-	var idx int
-	fmt.Sscanf(label, "skill:%d:", &idx)
-	return idx
+// stowGear moves the item in an equipped gear slot into inventory and clears it.
+func (m *Model) stowGear(slot *string) {
+	m.char.Inventory = append(m.char.Inventory, character.Item{Name: *slot, Weight: 1})
+	*slot = ""
+	m.rebuildFields()
+	m.autoSave()
 }
 
-func wahIndex(label string) int {
-	var idx int
-	fmt.Sscanf(label, "wah:%d", &idx)
-	return idx
+// clampFocus keeps the focus index valid after the field list shrinks.
+func (m *Model) clampFocus() {
+	if m.focus >= len(m.fields) {
+		m.focus = len(m.fields) - 1
+	}
 }
 
-func invIndex(label string) int {
-	var idx int
-	fmt.Sscanf(label, "inv:%d:", &idx)
-	return idx
-}
-
-func tinyIndex(label string) int {
-	var idx int
-	fmt.Sscanf(label, "tiny:%d", &idx)
-	return idx
-}
-
-func habIndex(label string) int {
-	var idx int
-	fmt.Sscanf(label, "hab:%d", &idx)
-	return idx
-}
-
-func kinIndex(label string) int {
-	var idx int
-	fmt.Sscanf(label, "kin:%d", &idx)
-	return idx
-}
-
-func (m *Model) clampResources() {
-	maxHP := character.HP(m.char.Attributes[character.CON]) + character.AbilityHPBonus(m.char.HeroicAbilities)
-	m.char.CurrentHP = max(0, min(maxHP, m.char.CurrentHP))
-	maxWP := character.WP(m.char.Attributes[character.WIL]) + character.AbilityWPBonus(m.char.HeroicAbilities)
-	m.char.CurrentWP = max(0, min(maxWP, m.char.CurrentWP))
+// signOf maps the increment/decrement keys to +1 / -1.
+func signOf(key string) int {
+	if key == keyDecr {
+		return -1
+	}
+	return 1
 }
 
 // openAbilityPicker opens the picker. The first option is "Custom…"; then predefined
@@ -615,7 +559,8 @@ func (m *Model) openAbilityPicker() {
 			unmet = append(unmet, ap)
 		}
 	}
-	picks := []abilityPick{{name: "", display: "Custom…", selectable: true}}
+	picks := make([]abilityPick, 0, 1+len(met)+len(unmet))
+	picks = append(picks, abilityPick{name: "", display: "Custom…", selectable: true})
 	picks = append(picks, met...)
 	picks = append(picks, unmet...)
 	m.abilityPicks = picks
@@ -636,7 +581,7 @@ func (m *Model) applyAbilityPick() {
 		m.char.HeroicAbilities = append(m.char.HeroicAbilities, character.HeroicAbility{})
 		idx := len(m.char.HeroicAbilities) - 1
 		m.rebuildFields()
-		if fi := m.fieldIndex(fmt.Sprintf("hab:%d", idx)); fi >= 0 {
+		if fi := m.fieldIndex(idHab(idx)); fi >= 0 {
 			m.focus = fi
 		}
 		m.startAbilityEdit(idx)
@@ -655,7 +600,7 @@ func (m *Model) applyAbilityPick() {
 		for i := range m.char.HeroicAbilities {
 			if base, qty := character.ParseQty(m.char.HeroicAbilities[i].Name); base == def.Name {
 				m.char.HeroicAbilities[i].Name = character.ApplyQty(base, qty+1)
-				m.clampResources()
+				m.char.ClampResources()
 				return
 			}
 		}
@@ -669,7 +614,7 @@ func (m *Model) applyAbilityPick() {
 		WPBonus:      def.WPBonus,
 	})
 	m.rebuildFields()
-	m.clampResources()
+	m.char.ClampResources()
 }
 
 func (m *Model) startAbilityEdit(idx int) {
@@ -731,25 +676,25 @@ func (m *Model) closeAbilityEdit() {
 func (m Model) handleAbilityKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	key := msg.String()
 	switch key {
-	case "ctrl+c":
+	case keyQuit:
 		return m, tea.Quit
-	case "enter":
+	case keyEnter:
 		if m.abilityActive == 3 {
 			m.openReqPicker(m.abilityIndex)
 			return m, nil
 		}
 		m.commitCurrentAbilityField()
 		m.closeAbilityEdit()
-		m.clampResources()
+		m.char.ClampResources()
 		m.autoSave()
 		return m, nil
-	case "esc":
+	case keyEsc:
 		m.commitCurrentAbilityField()
 		m.closeAbilityEdit()
-		m.clampResources()
+		m.char.ClampResources()
 		m.autoSave()
 		return m, nil
-	case "tab":
+	case keyTab:
 		m.commitCurrentAbilityField()
 		m.abilityActive = (m.abilityActive + 1) % 4
 		m.syncAbilityFocus()
@@ -778,7 +723,7 @@ func (m *Model) openReqPicker(idx int) {
 		m.reqChosen[r] = true
 	}
 	m.pickOptions = m.pickOptions[:0]
-	for _, sk := range character.PredefinedSkills {
+	for _, sk := range character.CoreSkills {
 		m.pickOptions = append(m.pickOptions, sk.Name)
 	}
 	m.pickSelected = 0
@@ -786,23 +731,23 @@ func (m *Model) openReqPicker(idx int) {
 
 func (m Model) handleReqKey(key string) (tea.Model, tea.Cmd) {
 	switch key {
-	case "esc":
+	case keyEsc:
 		m.reqMode = false
-	case "up", "k":
+	case keyUp, keyVimUp:
 		if m.pickSelected > 0 {
 			m.pickSelected--
 		}
-	case "down", "j":
+	case keyDown, keyVimDown:
 		if m.pickSelected < len(m.pickOptions)-1 {
 			m.pickSelected++
 		}
-	case "space":
+	case keySpace:
 		name := m.pickOptions[m.pickSelected]
 		m.reqChosen[name] = !m.reqChosen[name]
-	case "enter":
+	case keyEnter:
 		// Write selected skills back in predefined order for stable display.
 		var reqs []string
-		for _, sk := range character.PredefinedSkills {
+		for _, sk := range character.CoreSkills {
 			if m.reqChosen[sk.Name] {
 				reqs = append(reqs, sk.Name)
 			}
@@ -838,15 +783,15 @@ func (m *Model) commitCurrentWeaknessField() {
 func (m Model) handleWeaknessKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	key := msg.String()
 	switch key {
-	case "ctrl+c":
+	case keyQuit:
 		return m, tea.Quit
-	case "enter", "esc":
+	case keyEnter, keyEsc:
 		m.commitCurrentWeaknessField()
 		m.weaknessMode = false
 		m.weaknessName.Blur()
 		m.weaknessDesc.Blur()
 		return m, nil
-	case "tab":
+	case keyTab:
 		m.commitCurrentWeaknessField()
 		if m.weaknessActive == 0 {
 			m.weaknessActive = 1
