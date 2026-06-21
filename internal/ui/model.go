@@ -99,10 +99,12 @@ func visualLayout(c *character.Character) [][]string {
 	rows := [][]string{
 		// Identity row
 		{"Name", "Age", "Kin", "Profession", "weakness:name", "rest:round", "rest:stretch"},
-		// Attributes (left, paired to match conditions), Derived (middle), Conditions (right, two columns).
+		// Attributes (left, cols 0-1), Derived (middle, cols 2-3), Conditions (right, cols 4-5).
+		// Conditions stay in cols 4-5 on every row so vertical navigation lines up; the empty
+		// strings are gap placeholders for the derived column, which only has fields on row 0.
 		{"STR", "INT", "currentHP", "currentWP", "cond:exhausted", "cond:angry"},
-		{"CON", "WIL", "cond:sickly", "cond:scared"},
-		{"AGL", "CHA", "cond:dazed", "cond:disheartened"},
+		{"CON", "WIL", "", "", "cond:sickly", "cond:scared"},
+		{"AGL", "CHA", "", "", "cond:dazed", "cond:disheartened"},
 	}
 	var generalIdx, weaponIdx []int
 	for i, sk := range c.Skills {
@@ -256,6 +258,9 @@ func buildFields(c *character.Character) []field {
 	var fields []field
 	for _, row := range layout {
 		for _, label := range row {
+			if label == "" { // gap placeholder; never focusable
+				continue
+			}
 			if _, ok := seen[label]; ok {
 				continue
 			}
@@ -356,24 +361,23 @@ func (m *Model) moveGrid(drow, dcol int) {
 	row, col := m.currentPos()
 
 	if drow != 0 {
-		newRow := row + drow
-		if newRow < 0 || newRow >= len(m.grid) {
-			return
-		}
-		newCol := min(col, len(m.grid[newRow])-1)
-		if fi := m.grid[newRow][newCol]; fi >= 0 {
-			m.focus = fi
+		// Skip over gap placeholder cells (-1) so navigation reaches the next field.
+		for newRow := row + drow; newRow >= 0 && newRow < len(m.grid); newRow += drow {
+			newCol := min(col, len(m.grid[newRow])-1)
+			if fi := m.grid[newRow][newCol]; fi >= 0 {
+				m.focus = fi
+				return
+			}
 		}
 		return
 	}
 
-	// Horizontal navigation stops at visual boundaries — no wrapping.
-	newCol := col + dcol
-	if newCol < 0 || newCol >= len(m.grid[row]) {
-		return
-	}
-	if fi := m.grid[row][newCol]; fi >= 0 {
-		m.focus = fi
+	// Horizontal navigation stops at visual boundaries — no wrapping; skip gap cells.
+	for newCol := col + dcol; newCol >= 0 && newCol < len(m.grid[row]); newCol += dcol {
+		if fi := m.grid[row][newCol]; fi >= 0 {
+			m.focus = fi
+			return
+		}
 	}
 }
 
