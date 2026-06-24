@@ -62,6 +62,44 @@ const (
 
 var AttributeOrder = []Attribute{STR, CON, AGL, INT, WIL, CHA}
 
+// School is the school of magic a spell or magic trick belongs to. GeneralMagic
+// covers spells that are not tied to one of the three secondary magic skills.
+type School string
+
+const (
+	Animism      School = "Animism"
+	Elementalism School = "Elementalism"
+	Mentalism    School = "Mentalism"
+	GeneralMagic School = "General Magic"
+)
+
+var AllSchools = []School{Animism, Elementalism, Mentalism, GeneralMagic}
+
+// CastingTime is how long a spell takes to cast.
+type CastingTime string
+
+const (
+	CastAction   CastingTime = "Action"
+	CastReaction CastingTime = "Reaction"
+	CastStretch  CastingTime = "Stretch"
+	CastShift    CastingTime = "Shift"
+)
+
+var AllCastingTimes = []CastingTime{CastAction, CastReaction, CastStretch, CastShift}
+
+// Duration is how long a spell's effect lasts.
+type Duration string
+
+const (
+	DurInstant       Duration = "Instant"
+	DurRound         Duration = "Round"
+	DurStretch       Duration = "Stretch"
+	DurShift         Duration = "Shift"
+	DurConcentration Duration = "Concentration"
+)
+
+var AllDurations = []Duration{DurInstant, DurRound, DurStretch, DurShift, DurConcentration}
+
 const (
 	// DefaultAttribute is the starting value for every attribute on a blank sheet
 	// and the fallback for any attribute missing from a loaded file.
@@ -103,6 +141,33 @@ type HeroicAbility struct {
 	WPBonus      int      `json:"-"`
 }
 
+// Spell is a spell recorded in a character's grimoire. Prepared marks the spells the
+// character currently has ready to cast (limited by INT — see PreparedSpellLimit).
+// Prerequisites names other grimoire spells (the character must know at least one to
+// learn this one); Requirements are free-text casting requirements. WP cost is not
+// stored: it is a simple, fixed function of the spell's rank, so the player adjusts WP
+// manually.
+type Spell struct {
+	Name          string      `json:"name"`
+	School        School      `json:"school"`
+	Rank          int         `json:"rank"`
+	Prerequisites []string    `json:"prerequisites"`
+	Requirements  []string    `json:"requirements"`
+	CastingTime   CastingTime `json:"casting_time"`
+	Range         string      `json:"range"`
+	Duration      Duration    `json:"duration"`
+	Description   string      `json:"description"`
+	Prepared      bool        `json:"prepared"`
+}
+
+// MagicTrick is a minor spell. Tricks need no preparation and never consume a prepared
+// spell slot, so they are stored separately from the grimoire.
+type MagicTrick struct {
+	Name        string `json:"name"`
+	School      School `json:"school"`
+	Description string `json:"description"`
+}
+
 type Conditions struct {
 	Exhausted    bool `json:"exhausted"`
 	Sickly       bool `json:"sickly"`
@@ -131,6 +196,9 @@ type Character struct {
 	Inventory       []Item            `json:"inventory"`
 	TinyItems       []string          `json:"tiny_items"`
 	HeroicAbilities []HeroicAbility   `json:"heroic_abilities"`
+	MagicSkills     []Skill           `json:"magic_skills"`
+	Grimoire        []Spell           `json:"grimoire"`
+	MagicTricks     []MagicTrick      `json:"magic_tricks"`
 }
 
 // Skill names. These constants are the canonical identifiers shared by
@@ -201,6 +269,32 @@ var CoreSkills = []Skill{
 	{Name: SkillStaves, Attribute: AGL, Weapon: true},
 	{Name: SkillSwords, Attribute: STR, Weapon: true},
 }
+
+// Magic skill names. These are the three secondary magic skills; unlike CoreSkills a
+// character does not have them by default — only magical characters add the ones they
+// know. They are INT-based and never weapon skills.
+const (
+	SkillAnimism      = "Animism"
+	SkillElementalism = "Elementalism"
+	SkillMentalism    = "Mentalism"
+)
+
+// MagicSkillDefs is the canonical set of magic skills a character may add. It plays the
+// same role CoreSkills plays for general/weapon skills: the add-picker offers these, and
+// Load re-derives each magic skill's Attribute from here.
+var MagicSkillDefs = []Skill{
+	{Name: SkillAnimism, Attribute: INT},
+	{Name: SkillElementalism, Attribute: INT},
+	{Name: SkillMentalism, Attribute: INT},
+}
+
+// PredefinedSpells and PredefinedTricks are the core-rulebook spell and magic-trick
+// libraries offered by the Grimoire's add-pickers (alongside a Custom… entry). They are
+// populated in a later commit; the add-pickers already work with the Custom… entry.
+var (
+	PredefinedSpells []Spell
+	PredefinedTricks []MagicTrick
+)
 
 // Weapon-skill requirement groups used by several heroic abilities. The character
 // needs any ONE of the listed skills (at the requirement level) to qualify.
@@ -359,6 +453,9 @@ func Default() *Character {
 		Inventory:       []Item{},
 		TinyItems:       []string{},
 		HeroicAbilities: []HeroicAbility{},
+		MagicSkills:     []Skill{},
+		Grimoire:        []Spell{},
+		MagicTricks:     []MagicTrick{},
 	}
 }
 
@@ -463,6 +560,27 @@ func Load(path string) (*Character, error) {
 			c.HeroicAbilities[i].HPBonus = 0
 			c.HeroicAbilities[i].WPBonus = 0
 		}
+	}
+	// Magic skills are optional (not auto-added), but their Attribute is json:"-", so
+	// re-derive it from the canonical defs just like CoreSkills above.
+	if c.MagicSkills == nil {
+		c.MagicSkills = []Skill{}
+	}
+	magicDefs := make(map[string]Skill, len(MagicSkillDefs))
+	for _, sk := range MagicSkillDefs {
+		magicDefs[sk.Name] = sk
+	}
+	for i, sk := range c.MagicSkills {
+		if def, ok := magicDefs[sk.Name]; ok {
+			c.MagicSkills[i].Attribute = def.Attribute
+			c.MagicSkills[i].Weapon = def.Weapon
+		}
+	}
+	if c.Grimoire == nil {
+		c.Grimoire = []Spell{}
+	}
+	if c.MagicTricks == nil {
+		c.MagicTricks = []MagicTrick{}
 	}
 	// Default current values to max if out of range. Maxima include ability bonuses,
 	// so this runs after the bonuses are re-derived above.

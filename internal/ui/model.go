@@ -48,6 +48,11 @@ const (
 	famKinAbility // index → KinAbilities(Character.Kin)
 	famHab        // index → Character.HeroicAbilities
 	famHabEmpty
+	famMagicSkillLevel // index → Character.MagicSkills
+	famMagicSkillAdv   // index → Character.MagicSkills
+	famMagicEmpty
+	famPreparedSpell // index → Character.PreparedSpells()
+	famPreparedEmpty
 )
 
 // fieldID names a focusable field structurally. It is comparable, so it doubles
@@ -60,20 +65,22 @@ type fieldID struct {
 // Constructors for the singleton and indexed field families, so layout and
 // rendering refer to fields by typed value instead of formatted strings.
 var (
-	idName         = fieldID{family: famName}
-	idAge          = fieldID{family: famAge}
-	idKin          = fieldID{family: famKin}
-	idProfession   = fieldID{family: famProfession}
-	idCurrentHP    = fieldID{family: famCurrentHP}
-	idCurrentWP    = fieldID{family: famCurrentWP}
-	idWeaknessName = fieldID{family: famWeaknessName}
-	idRestRound    = fieldID{family: famRestRound}
-	idRestStretch  = fieldID{family: famRestStretch}
-	idArmor        = fieldID{family: famArmor}
-	idHelmet       = fieldID{family: famHelmet}
-	idInvEmpty     = fieldID{family: famInvEmpty}
-	idTinyEmpty    = fieldID{family: famTinyEmpty}
-	idHabEmpty     = fieldID{family: famHabEmpty}
+	idName          = fieldID{family: famName}
+	idAge           = fieldID{family: famAge}
+	idKin           = fieldID{family: famKin}
+	idProfession    = fieldID{family: famProfession}
+	idCurrentHP     = fieldID{family: famCurrentHP}
+	idCurrentWP     = fieldID{family: famCurrentWP}
+	idWeaknessName  = fieldID{family: famWeaknessName}
+	idRestRound     = fieldID{family: famRestRound}
+	idRestStretch   = fieldID{family: famRestStretch}
+	idArmor         = fieldID{family: famArmor}
+	idHelmet        = fieldID{family: famHelmet}
+	idInvEmpty      = fieldID{family: famInvEmpty}
+	idTinyEmpty     = fieldID{family: famTinyEmpty}
+	idHabEmpty      = fieldID{family: famHabEmpty}
+	idMagicEmpty    = fieldID{family: famMagicEmpty}
+	idPreparedEmpty = fieldID{family: famPreparedEmpty}
 )
 
 func idAttr(i int) fieldID         { return fieldID{famAttr, i} }
@@ -86,6 +93,10 @@ func idInvWeight(i int) fieldID    { return fieldID{famInvWeight, i} }
 func idTiny(i int) fieldID         { return fieldID{famTiny, i} }
 func idKinAbility(i int) fieldID   { return fieldID{famKinAbility, i} }
 func idHab(i int) fieldID          { return fieldID{famHab, i} }
+
+func idMagicSkillLevel(i int) fieldID { return fieldID{famMagicSkillLevel, i} }
+func idMagicSkillAdv(i int) fieldID   { return fieldID{famMagicSkillAdv, i} }
+func idPreparedSpell(i int) fieldID   { return fieldID{famPreparedSpell, i} }
 
 type field struct {
 	id      fieldID
@@ -113,6 +124,7 @@ const (
 	secTinyItems  = 7
 	secConditions = 8
 	secHeroic     = 9
+	secMagic      = 10
 )
 
 // Model mixes value and pointer receivers by necessity: bubbletea's tea.Model
@@ -162,6 +174,46 @@ type Model struct {
 
 	detailMode    bool                    // read-only ability description popup
 	detailAbility character.HeroicAbility // ability shown in the detail popup
+
+	// Magic. The magic-skill add picker and the grimoire add picker both reuse
+	// `picking`; the flags below mark which one is active.
+	pickMagicSkill bool       // picker is choosing a magic skill to add
+	pickMagic      bool       // grimoire add picker (spells and tricks together)
+	magicPicks     []namePick // options for the grimoire add picker (Custom entries first)
+
+	grimoireMode bool // grimoire list modal (spells then tricks)
+	grimoireSel  int  // cursor in the grimoire list
+
+	spellMode   bool // spell edit modal active
+	spellActive int  // active field; see spellField* constants
+	spellIndex  int  // index into char.Grimoire being edited
+	spellName   textinput.Model
+	spellRank   textinput.Model
+	spellRange  textinput.Model
+	spellReq    textinput.Model
+	spellDesc   textinput.Model
+
+	trickMode   bool // magic-trick edit modal active
+	trickActive int  // active field; see trickField* constants
+	trickIndex  int  // index into char.MagicTricks being edited
+	trickName   textinput.Model
+	trickDesc   textinput.Model
+
+	prereqMode   bool            // multi-select picker for a spell's prerequisite spells
+	prereqIndex  int             // grimoire index whose prerequisites are being edited
+	prereqChosen map[string]bool // spell name -> selected
+
+	spellDetailMode bool            // read-only spell description popup
+	detailSpell     character.Spell // spell shown in the detail popup
+}
+
+// namePick is one row in the grimoire add picker: name is the underlying predefined
+// name ("" for a Custom… entry), display is the label shown, and trick distinguishes
+// magic tricks from spells (they go to different lists and editors).
+type namePick struct {
+	name    string
+	display string
+	trick   bool
 }
 
 // visualLayout is the single source of truth for where every focusable field
@@ -236,6 +288,36 @@ func visualLayout(c *character.Character) [][]fieldID {
 	}
 	rows = append(rows, habRows...)
 
+	// Magic section (after heroic abilities). Two columns rendered side by side, like
+	// inventory/tiny items: known magic skills on the left (level + advancement), the
+	// prepared spells on the right.
+	var magicSkillRows [][]fieldID
+	if len(c.MagicSkills) == 0 {
+		magicSkillRows = append(magicSkillRows, []fieldID{idMagicEmpty})
+	} else {
+		for i := range len(c.MagicSkills) {
+			magicSkillRows = append(magicSkillRows, []fieldID{idMagicSkillLevel(i), idMagicSkillAdv(i)})
+		}
+	}
+	var preparedRows [][]fieldID
+	if prepared := c.PreparedSpells(); len(prepared) == 0 {
+		preparedRows = append(preparedRows, []fieldID{idPreparedEmpty})
+	} else {
+		for i := range prepared {
+			preparedRows = append(preparedRows, []fieldID{idPreparedSpell(i)})
+		}
+	}
+	for r := range max(len(magicSkillRows), len(preparedRows)) {
+		var row []fieldID
+		if r < len(magicSkillRows) {
+			row = append(row, magicSkillRows[r]...)
+		}
+		if r < len(preparedRows) {
+			row = append(row, preparedRows[r]...)
+		}
+		rows = append(rows, row)
+	}
+
 	// Gear section
 	rows = append(rows, []fieldID{idArmor, idHelmet, idWeaponAtHand(0), idWeaponAtHand(1), idWeaponAtHand(2)})
 	// Inventory and tiny items rendered side by side.
@@ -308,6 +390,12 @@ func metaFor(id fieldID) field {
 		return mk(kindLabel, secTinyItems)
 	case famKinAbility, famHab, famHabEmpty:
 		return mk(kindLabel, secHeroic)
+	case famMagicSkillLevel:
+		return mk(kindInt, secMagic)
+	case famMagicSkillAdv:
+		return mk(kindBool, secMagic)
+	case famMagicEmpty, famPreparedSpell, famPreparedEmpty:
+		return mk(kindLabel, secMagic)
 	default:
 		return field{id: id}
 	}
@@ -376,6 +464,34 @@ func New(c *character.Character, path string) Model {
 	ad.CharLimit = 512
 	ad.SetWidth(60)
 
+	sn := textinput.New()
+	sn.CharLimit = 256
+	sn.SetWidth(40)
+
+	sr := textinput.New()
+	sr.CharLimit = 4
+	sr.SetWidth(6)
+
+	srng := textinput.New()
+	srng.CharLimit = 64
+	srng.SetWidth(30)
+
+	sreq := textinput.New()
+	sreq.CharLimit = 256
+	sreq.SetWidth(40)
+
+	sd := textinput.New()
+	sd.CharLimit = 512
+	sd.SetWidth(60)
+
+	tn := textinput.New()
+	tn.CharLimit = 256
+	tn.SetWidth(40)
+
+	td := textinput.New()
+	td.CharLimit = 512
+	td.SetWidth(60)
+
 	m := Model{
 		char:            c,
 		path:            path,
@@ -384,6 +500,13 @@ func New(c *character.Character, path string) Model {
 		abilityName:     an,
 		abilityCost:     ac,
 		abilityDesc:     ad,
+		spellName:       sn,
+		spellRank:       sr,
+		spellRange:      srng,
+		spellReq:        sreq,
+		spellDesc:       sd,
+		trickName:       tn,
+		trickDesc:       td,
 		pickEquipSource: -1,
 	}
 	m.textInput = ti

@@ -38,6 +38,8 @@ const (
 	keyIncr    = "=" // increment a number / quantity
 	keyIncrAlt = "+" // increment alias
 	keyDecr    = "-" // decrement a number / quantity
+
+	keyGrimoire = "g" // open the grimoire (magic section)
 )
 
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
@@ -57,6 +59,30 @@ func (m Model) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 
 	if m.picking {
 		return m.handlePickerKey(key)
+	}
+
+	if m.spellDetailMode {
+		if key == keyQuit {
+			return m, tea.Quit
+		}
+		m.spellDetailMode = false
+		return m, nil
+	}
+
+	if m.prereqMode {
+		return m.handlePrereqKey(key)
+	}
+
+	if m.spellMode {
+		return m.handleSpellKey(msg)
+	}
+
+	if m.trickMode {
+		return m.handleTrickKey(msg)
+	}
+
+	if m.grimoireMode {
+		return m.handleGrimoireKey(key)
 	}
 
 	if m.detailMode {
@@ -250,6 +276,51 @@ func (m Model) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		}
 	}
 
+	if f.section == secMagic {
+		switch f.id.family {
+		case famMagicSkillLevel, famMagicSkillAdv:
+			switch key {
+			case keyAdd:
+				m.openMagicSkillPicker()
+				return m, nil
+			case keyRemove:
+				if i := f.id.index; i >= 0 && i < len(m.char.MagicSkills) {
+					m.char.MagicSkills = append(m.char.MagicSkills[:i], m.char.MagicSkills[i+1:]...)
+					m.rebuildFields()
+					m.clampFocus()
+					m.autoSave()
+				}
+				return m, nil
+			}
+		case famMagicEmpty:
+			if key == keyAdd {
+				m.openMagicSkillPicker()
+				return m, nil
+			}
+		case famPreparedSpell:
+			// 'g' opens the grimoire; it belongs to the prepared-spells column, not the
+			// magic-skills column.
+			switch key {
+			case keyGrimoire:
+				m.openGrimoire()
+				return m, nil
+			case keyEnter:
+				prepared := m.char.PreparedSpells()
+				if i := f.id.index; i >= 0 && i < len(prepared) {
+					m.detailSpell = prepared[i]
+					m.spellDetailMode = true
+				}
+				return m, nil
+			}
+		case famPreparedEmpty:
+			if key == keyGrimoire {
+				m.openGrimoire()
+				return m, nil
+			}
+		default:
+		}
+	}
+
 	switch f.kind {
 	case kindText:
 		if key == keyEnter {
@@ -289,6 +360,8 @@ func (m Model) handlePickerKey(key string) (tea.Model, tea.Cmd) {
 	case keyEsc, keyQuitAlt:
 		m.picking = false
 		m.pickAbility = false
+		m.pickMagicSkill = false
+		m.pickMagic = false
 		m.pickEquipSource = -1
 	case keyUp, keyVimUp:
 		if m.pickSelected > 0 {
@@ -296,8 +369,11 @@ func (m Model) handlePickerKey(key string) (tea.Model, tea.Cmd) {
 		}
 	case keyDown, keyVimDown:
 		limit := len(m.pickOptions) - 1
-		if m.pickAbility {
+		switch {
+		case m.pickAbility:
 			limit = len(m.abilityPicks) - 1 // can scroll onto unmet abilities, just not select them
+		case m.pickMagic:
+			limit = len(m.magicPicks) - 1
 		}
 		if m.pickSelected < limit {
 			m.pickSelected++
@@ -306,8 +382,8 @@ func (m Model) handlePickerKey(key string) (tea.Model, tea.Cmd) {
 		m.applyPickerSelection()
 		m.picking = false
 		m.autoSave()
-		// Picking "Custom…" opens the ability edit modal; start its cursor blinking.
-		if m.abilityMode {
+		// Picking customLabel opens an edit modal; start its cursor blinking.
+		if m.abilityMode || m.spellMode || m.trickMode {
 			return m, textinput.Blink
 		}
 	}
@@ -379,6 +455,16 @@ func (m *Model) applyPickerSelection() {
 	if m.pickAbility {
 		m.applyAbilityPick()
 		m.pickAbility = false
+		return
+	}
+	if m.pickMagicSkill {
+		m.applyMagicSkillPick()
+		m.pickMagicSkill = false
+		return
+	}
+	if m.pickMagic {
+		m.applyMagicPick()
+		m.pickMagic = false
 		return
 	}
 	if m.pickEquipSource >= 0 {
@@ -467,6 +553,10 @@ func (m *Model) adjustInt(delta int) {
 		if i := f.id.index; i >= 0 && i < len(m.char.Inventory) {
 			m.char.Inventory[i].Weight = max(1, m.char.Inventory[i].Weight+delta)
 		}
+	case famMagicSkillLevel:
+		if i := f.id.index; i >= 0 && i < len(m.char.MagicSkills) {
+			m.char.MagicSkills[i].Level = max(0, m.char.MagicSkills[i].Level+delta)
+		}
 	default: // not a numeric field
 	}
 }
@@ -497,6 +587,10 @@ func (m *Model) toggleBool() {
 		if i := f.id.index; i >= 0 && i < len(conditionOrder) {
 			p := conditionOrder[i].ptr(m.char)
 			*p = !*p
+		}
+	case famMagicSkillAdv:
+		if i := f.id.index; i >= 0 && i < len(m.char.MagicSkills) {
+			m.char.MagicSkills[i].Advanced = !m.char.MagicSkills[i].Advanced
 		}
 	case famRestRound:
 		m.char.RoundRestUsed = !m.char.RoundRestUsed
@@ -537,7 +631,7 @@ func signOf(key string) int {
 	return 1
 }
 
-// openAbilityPicker opens the picker. The first option is "Custom…"; then predefined
+// openAbilityPicker opens the picker. The first option is customLabel; then predefined
 // abilities whose requirements the character meets (selectable); then the rest, dimmed
 // and unselectable at the bottom. Each row shows the ability's requirements.
 func (m *Model) openAbilityPicker() {
@@ -560,7 +654,7 @@ func (m *Model) openAbilityPicker() {
 		}
 	}
 	picks := make([]abilityPick, 0, 1+len(met)+len(unmet))
-	picks = append(picks, abilityPick{name: "", display: "Custom…", selectable: true})
+	picks = append(picks, abilityPick{name: "", display: customLabel, selectable: true})
 	picks = append(picks, met...)
 	picks = append(picks, unmet...)
 	m.abilityPicks = picks
@@ -816,4 +910,515 @@ func (m Model) handleWeaknessKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		}
 		return m, cmd
 	}
+}
+
+// Magic.
+
+// Spell edit modal field indices.
+const (
+	spellFieldName = iota
+	spellFieldSchool
+	spellFieldRank
+	spellFieldCasting
+	spellFieldRange
+	spellFieldDuration
+	spellFieldReq
+	spellFieldPrereq
+	spellFieldDesc
+	spellFieldCount
+)
+
+// Trick edit modal field indices.
+const (
+	trickFieldName = iota
+	trickFieldSchool
+	trickFieldDesc
+	trickFieldCount
+)
+
+func (m *Model) openGrimoire() {
+	m.grimoireMode = true
+	m.grimoireSel = 0
+}
+
+// handleGrimoireKey drives the grimoire list modal: spells first (indices 0..nSpells-1),
+// then magic tricks. Spell/trick edit and the record pickers overlay this modal.
+func (m Model) handleGrimoireKey(key string) (tea.Model, tea.Cmd) {
+	nSpells := len(m.char.Grimoire)
+	total := nSpells + len(m.char.MagicTricks)
+	switch key {
+	case keyQuit:
+		return m, tea.Quit
+	case keyEsc, keyQuitAlt:
+		m.grimoireMode = false
+		return m, nil
+	case keyUp, keyVimUp:
+		if m.grimoireSel > 0 {
+			m.grimoireSel--
+		}
+		return m, nil
+	case keyDown, keyVimDown:
+		if m.grimoireSel < total-1 {
+			m.grimoireSel++
+		}
+		return m, nil
+	case keyAdd:
+		m.openAddMagicPicker()
+		return m, nil
+	case keySpace:
+		// Study the grimoire: toggle whether a spell is prepared. Advisory only — the
+		// INT limit is shown but never enforced.
+		if m.grimoireSel < nSpells {
+			m.char.Grimoire[m.grimoireSel].Prepared = !m.char.Grimoire[m.grimoireSel].Prepared
+			m.rebuildFields() // the prepared-spells column changed
+			m.clampFocus()
+			m.autoSave()
+		}
+		return m, nil
+	case keyEnter:
+		if m.grimoireSel < nSpells {
+			m.startSpellEdit(m.grimoireSel)
+			return m, textinput.Blink
+		}
+		if ti := m.grimoireSel - nSpells; ti >= 0 && ti < len(m.char.MagicTricks) {
+			m.startTrickEdit(ti)
+			return m, textinput.Blink
+		}
+		return m, nil
+	case keyRemove:
+		if m.grimoireSel < nSpells {
+			m.char.Grimoire = append(m.char.Grimoire[:m.grimoireSel], m.char.Grimoire[m.grimoireSel+1:]...)
+		} else if ti := m.grimoireSel - nSpells; ti >= 0 && ti < len(m.char.MagicTricks) {
+			m.char.MagicTricks = append(m.char.MagicTricks[:ti], m.char.MagicTricks[ti+1:]...)
+		}
+		if newTotal := len(m.char.Grimoire) + len(m.char.MagicTricks); m.grimoireSel >= newTotal {
+			m.grimoireSel = max(0, newTotal-1)
+		}
+		m.rebuildFields()
+		m.clampFocus()
+		m.autoSave()
+		return m, nil
+	}
+	return m, nil
+}
+
+func (m *Model) openMagicSkillPicker() {
+	known := make(map[string]bool, len(m.char.MagicSkills))
+	for _, sk := range m.char.MagicSkills {
+		known[sk.Name] = true
+	}
+	m.pickOptions = m.pickOptions[:0]
+	for _, def := range character.MagicSkillDefs {
+		if !known[def.Name] {
+			m.pickOptions = append(m.pickOptions, def.Name)
+		}
+	}
+	if len(m.pickOptions) == 0 { // all three already known
+		return
+	}
+	m.pickSelected = 0
+	m.pickMagicSkill = true
+	m.picking = true
+}
+
+func (m *Model) applyMagicSkillPick() {
+	if m.pickSelected < 0 || m.pickSelected >= len(m.pickOptions) {
+		return
+	}
+	name := m.pickOptions[m.pickSelected]
+	for _, def := range character.MagicSkillDefs {
+		if def.Name == name {
+			sk := def
+			sk.Level = character.UntrainedSkillLevel
+			m.char.MagicSkills = append(m.char.MagicSkills, sk)
+			break
+		}
+	}
+	m.rebuildFields()
+}
+
+// openAddMagicPicker builds the grimoire add picker. Spells and tricks are recorded
+// through the same picker (a single 'a' action): the Custom… entries come first, then
+// any predefined spells, then any predefined tricks (tagged via namePick.trick).
+func (m *Model) openAddMagicPicker() {
+	m.magicPicks = m.magicPicks[:0]
+	m.magicPicks = append(m.magicPicks,
+		namePick{display: "Custom Spell…"},
+		namePick{display: "Custom Trick…", trick: true},
+	)
+	for _, sp := range character.PredefinedSpells {
+		m.magicPicks = append(m.magicPicks, namePick{name: sp.Name, display: sp.Name})
+	}
+	for _, tr := range character.PredefinedTricks {
+		m.magicPicks = append(m.magicPicks, namePick{name: tr.Name, display: tr.Name + " (trick)", trick: true})
+	}
+	m.pickSelected = 0
+	m.pickMagic = true
+	m.picking = true
+}
+
+func (m *Model) applyMagicPick() {
+	if m.pickSelected < 0 || m.pickSelected >= len(m.magicPicks) {
+		return
+	}
+	pick := m.magicPicks[m.pickSelected]
+	if pick.trick {
+		m.addTrick(pick.name)
+		return
+	}
+	m.addSpell(pick.name)
+}
+
+// addSpell records a spell into the grimoire. An empty name means Custom…: a blank spell
+// with valid enum defaults (so cycling works) is created and its editor opened.
+func (m *Model) addSpell(name string) {
+	if name == "" {
+		m.char.Grimoire = append(m.char.Grimoire, character.Spell{
+			School:      character.Animism,
+			CastingTime: character.CastAction,
+			Duration:    character.DurInstant,
+		})
+		idx := len(m.char.Grimoire) - 1
+		m.grimoireSel = idx
+		m.rebuildFields()
+		m.startSpellEdit(idx)
+		return
+	}
+	for _, sp := range character.PredefinedSpells {
+		if sp.Name == name {
+			cp := sp
+			cp.Prerequisites = append([]string(nil), sp.Prerequisites...)
+			cp.Requirements = append([]string(nil), sp.Requirements...)
+			m.char.Grimoire = append(m.char.Grimoire, cp)
+			break
+		}
+	}
+	m.rebuildFields()
+}
+
+// addTrick adds a magic trick. An empty name means Custom…: a blank trick is created and
+// its editor opened.
+func (m *Model) addTrick(name string) {
+	if name == "" {
+		m.char.MagicTricks = append(m.char.MagicTricks, character.MagicTrick{School: character.Animism})
+		idx := len(m.char.MagicTricks) - 1
+		m.grimoireSel = len(m.char.Grimoire) + idx
+		m.startTrickEdit(idx)
+		return
+	}
+	for _, tr := range character.PredefinedTricks {
+		if tr.Name == name {
+			m.char.MagicTricks = append(m.char.MagicTricks, tr)
+			break
+		}
+	}
+}
+
+func (m *Model) startSpellEdit(idx int) {
+	m.spellMode = true
+	m.spellIndex = idx
+	m.spellActive = spellFieldName
+	m.syncSpellFocus()
+}
+
+// syncSpellFocus focuses the text input for the active modal field (none for the enum or
+// prerequisites fields) and seeds it from the spell's current value.
+func (m *Model) syncSpellFocus() {
+	sp := m.char.Grimoire[m.spellIndex]
+	m.spellName.Blur()
+	m.spellRank.Blur()
+	m.spellRange.Blur()
+	m.spellReq.Blur()
+	m.spellDesc.Blur()
+	switch m.spellActive {
+	case spellFieldName:
+		m.spellName.SetValue(sp.Name)
+		m.spellName.CursorEnd()
+		m.spellName.Focus()
+	case spellFieldRank:
+		m.spellRank.SetValue(strconv.Itoa(sp.Rank))
+		m.spellRank.CursorEnd()
+		m.spellRank.Focus()
+	case spellFieldRange:
+		m.spellRange.SetValue(sp.Range)
+		m.spellRange.CursorEnd()
+		m.spellRange.Focus()
+	case spellFieldReq:
+		m.spellReq.SetValue(strings.Join(sp.Requirements, ", "))
+		m.spellReq.CursorEnd()
+		m.spellReq.Focus()
+	case spellFieldDesc:
+		m.spellDesc.SetValue(sp.Description)
+		m.spellDesc.CursorEnd()
+		m.spellDesc.Focus()
+	}
+}
+
+func (m *Model) commitCurrentSpellField() {
+	idx := m.spellIndex
+	if idx < 0 || idx >= len(m.char.Grimoire) {
+		return
+	}
+	sp := &m.char.Grimoire[idx]
+	switch m.spellActive {
+	case spellFieldName:
+		sp.Name = m.spellName.Value()
+	case spellFieldRank:
+		if n, err := strconv.Atoi(strings.TrimSpace(m.spellRank.Value())); err == nil {
+			sp.Rank = max(0, n)
+		} else {
+			sp.Rank = 0
+		}
+	case spellFieldRange:
+		sp.Range = m.spellRange.Value()
+	case spellFieldReq:
+		sp.Requirements = splitCSV(m.spellReq.Value())
+	case spellFieldDesc:
+		sp.Description = m.spellDesc.Value()
+	}
+}
+
+func (m *Model) closeSpellEdit() {
+	m.spellMode = false
+	m.spellName.Blur()
+	m.spellRank.Blur()
+	m.spellRange.Blur()
+	m.spellReq.Blur()
+	m.spellDesc.Blur()
+}
+
+func (m Model) handleSpellKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
+	key := msg.String()
+	if key == keyQuit {
+		return m, tea.Quit
+	}
+	// Enum fields (School/Casting Time/Duration) are not text inputs: arrows cycle them.
+	if key == keyLeft || key == keyRight {
+		if m.cycleSpellEnum(m.spellActive, arrowSign(key)) {
+			m.autoSave()
+			return m, nil
+		}
+	}
+	switch key {
+	case keyEnter:
+		if m.spellActive == spellFieldPrereq {
+			m.openPrereqPicker(m.spellIndex)
+			return m, nil
+		}
+		m.commitCurrentSpellField()
+		m.closeSpellEdit()
+		m.autoSave()
+		return m, nil
+	case keyEsc:
+		m.commitCurrentSpellField()
+		m.closeSpellEdit()
+		m.autoSave()
+		return m, nil
+	case keyTab:
+		m.commitCurrentSpellField()
+		m.spellActive = (m.spellActive + 1) % spellFieldCount
+		m.syncSpellFocus()
+		return m, textinput.Blink
+	default:
+		var cmd tea.Cmd
+		switch m.spellActive {
+		case spellFieldName:
+			m.spellName, cmd = m.spellName.Update(msg)
+		case spellFieldRank:
+			m.spellRank, cmd = m.spellRank.Update(msg)
+		case spellFieldRange:
+			m.spellRange, cmd = m.spellRange.Update(msg)
+		case spellFieldReq:
+			m.spellReq, cmd = m.spellReq.Update(msg)
+		case spellFieldDesc:
+			m.spellDesc, cmd = m.spellDesc.Update(msg)
+		}
+		return m, cmd
+	}
+}
+
+// cycleSpellEnum advances the active enum field by dir (±1) and reports whether the
+// active field was an enum field (so text fields can fall through to the text input).
+func (m *Model) cycleSpellEnum(active, dir int) bool {
+	if m.spellIndex < 0 || m.spellIndex >= len(m.char.Grimoire) {
+		return false
+	}
+	sp := &m.char.Grimoire[m.spellIndex]
+	switch active {
+	case spellFieldSchool:
+		sp.School = character.School(cycleEnum(toStrings(character.AllSchools), string(sp.School), dir))
+	case spellFieldCasting:
+		sp.CastingTime = character.CastingTime(cycleEnum(toStrings(character.AllCastingTimes), string(sp.CastingTime), dir))
+	case spellFieldDuration:
+		sp.Duration = character.Duration(cycleEnum(toStrings(character.AllDurations), string(sp.Duration), dir))
+	default:
+		return false
+	}
+	return true
+}
+
+func (m *Model) startTrickEdit(idx int) {
+	m.trickMode = true
+	m.trickIndex = idx
+	m.trickActive = trickFieldName
+	m.syncTrickFocus()
+}
+
+func (m *Model) syncTrickFocus() {
+	tr := m.char.MagicTricks[m.trickIndex]
+	m.trickName.Blur()
+	m.trickDesc.Blur()
+	switch m.trickActive {
+	case trickFieldName:
+		m.trickName.SetValue(tr.Name)
+		m.trickName.CursorEnd()
+		m.trickName.Focus()
+	case trickFieldDesc:
+		m.trickDesc.SetValue(tr.Description)
+		m.trickDesc.CursorEnd()
+		m.trickDesc.Focus()
+	}
+}
+
+func (m *Model) commitCurrentTrickField() {
+	idx := m.trickIndex
+	if idx < 0 || idx >= len(m.char.MagicTricks) {
+		return
+	}
+	switch m.trickActive {
+	case trickFieldName:
+		m.char.MagicTricks[idx].Name = m.trickName.Value()
+	case trickFieldDesc:
+		m.char.MagicTricks[idx].Description = m.trickDesc.Value()
+	}
+}
+
+func (m *Model) closeTrickEdit() {
+	m.trickMode = false
+	m.trickName.Blur()
+	m.trickDesc.Blur()
+}
+
+func (m Model) handleTrickKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
+	key := msg.String()
+	if key == keyQuit {
+		return m, tea.Quit
+	}
+	if (key == keyLeft || key == keyRight) && m.trickActive == trickFieldSchool {
+		if idx := m.trickIndex; idx >= 0 && idx < len(m.char.MagicTricks) {
+			tr := &m.char.MagicTricks[idx]
+			tr.School = character.School(cycleEnum(toStrings(character.AllSchools), string(tr.School), arrowSign(key)))
+			m.autoSave()
+		}
+		return m, nil
+	}
+	switch key {
+	case keyEnter, keyEsc:
+		m.commitCurrentTrickField()
+		m.closeTrickEdit()
+		m.autoSave()
+		return m, nil
+	case keyTab:
+		m.commitCurrentTrickField()
+		m.trickActive = (m.trickActive + 1) % trickFieldCount
+		m.syncTrickFocus()
+		return m, textinput.Blink
+	default:
+		var cmd tea.Cmd
+		switch m.trickActive {
+		case trickFieldName:
+			m.trickName, cmd = m.trickName.Update(msg)
+		case trickFieldDesc:
+			m.trickDesc, cmd = m.trickDesc.Update(msg)
+		}
+		return m, cmd
+	}
+}
+
+// openPrereqPicker opens the multi-select list of other grimoire spells for editing spell
+// idx's prerequisites. It reuses pickOptions/pickSelected; prereqChosen tracks the toggles.
+func (m *Model) openPrereqPicker(idx int) {
+	m.prereqMode = true
+	m.prereqIndex = idx
+	m.prereqChosen = make(map[string]bool)
+	for _, r := range m.char.Grimoire[idx].Prerequisites {
+		m.prereqChosen[r] = true
+	}
+	m.pickOptions = m.pickOptions[:0]
+	for i, sp := range m.char.Grimoire {
+		if i == idx || sp.Name == "" {
+			continue
+		}
+		m.pickOptions = append(m.pickOptions, sp.Name)
+	}
+	m.pickSelected = 0
+}
+
+func (m Model) handlePrereqKey(key string) (tea.Model, tea.Cmd) {
+	switch key {
+	case keyEsc:
+		m.prereqMode = false
+	case keyUp, keyVimUp:
+		if m.pickSelected > 0 {
+			m.pickSelected--
+		}
+	case keyDown, keyVimDown:
+		if m.pickSelected < len(m.pickOptions)-1 {
+			m.pickSelected++
+		}
+	case keySpace:
+		if len(m.pickOptions) > 0 {
+			name := m.pickOptions[m.pickSelected]
+			m.prereqChosen[name] = !m.prereqChosen[name]
+		}
+	case keyEnter:
+		// Write chosen spells back in grimoire (pickOptions) order for stable display.
+		var prereqs []string
+		for _, name := range m.pickOptions {
+			if m.prereqChosen[name] {
+				prereqs = append(prereqs, name)
+			}
+		}
+		if m.prereqIndex >= 0 && m.prereqIndex < len(m.char.Grimoire) {
+			m.char.Grimoire[m.prereqIndex].Prerequisites = prereqs
+		}
+		m.prereqMode = false
+		m.autoSave()
+	}
+	return m, nil
+}
+
+// cycleEnum returns the option after cur (dir +1) or before it (dir -1), wrapping around.
+// If cur is not in opts, it returns the first option.
+func cycleEnum(opts []string, cur string, dir int) string {
+	if len(opts) == 0 {
+		return cur
+	}
+	idx := 0
+	for i, o := range opts {
+		if o == cur {
+			idx = i
+			break
+		}
+	}
+	return opts[(idx+dir+len(opts))%len(opts)]
+}
+
+// arrowSign maps the left/right arrow keys to -1 / +1 for enum cycling.
+func arrowSign(key string) int {
+	if key == keyLeft {
+		return -1
+	}
+	return 1
+}
+
+// splitCSV splits a comma-separated free-text field into trimmed, non-empty values.
+func splitCSV(s string) []string {
+	var out []string
+	for part := range strings.SplitSeq(s, ",") {
+		if v := strings.TrimSpace(part); v != "" {
+			out = append(out, v)
+		}
+	}
+	return out
 }

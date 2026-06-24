@@ -72,6 +72,46 @@ func (c *Character) ClampResources() {
 	c.CurrentWP = max(0, min(c.MaxWP(), c.CurrentWP))
 }
 
+// PreparedSpellLimit returns how many spells a character may have prepared at once,
+// based on their INT. Magic tricks do not count against this limit.
+func PreparedSpellLimit(intv int) int {
+	switch {
+	case intv <= 5:
+		return 3
+	case intv <= 8:
+		return 4
+	case intv <= 12:
+		return 5
+	case intv <= 15:
+		return 6
+	default:
+		return 7
+	}
+}
+
+// PreparedCount returns how many grimoire spells are currently prepared.
+func (c *Character) PreparedCount() int {
+	n := 0
+	for _, s := range c.Grimoire {
+		if s.Prepared {
+			n++
+		}
+	}
+	return n
+}
+
+// PreparedSpells returns the subset of the grimoire that is currently prepared, in
+// grimoire order.
+func (c *Character) PreparedSpells() []Spell {
+	var out []Spell
+	for _, s := range c.Grimoire {
+		if s.Prepared {
+			out = append(out, s)
+		}
+	}
+	return out
+}
+
 // InventorySlots returns the number of inventory slots (= ceil(STR/2)).
 func InventorySlots(str int) int { return (str + 1) / 2 }
 
