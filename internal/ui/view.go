@@ -67,6 +67,9 @@ func (m Model) render() string {
 	if m.spellDetailMode {
 		return m.viewSpellDetail()
 	}
+	if m.trickDetailMode {
+		return m.viewTrickDetail()
+	}
 	if m.prereqMode {
 		return m.viewPrereqPicker()
 	}
@@ -246,9 +249,10 @@ func (m Model) viewWeaknessEdit() string {
 func col1W(termW int) int { return max(78, termW/2) }
 
 func (m Model) viewAttrResources(w int) string {
-	// leftWidth=38: first divider aligns with the inner skill-pair column split (col 39).
+	// leftWidth=36: first divider (at col leftWidth+1=37) aligns with the inner skill-pair
+	// column split, which sits at col 37 (leading space + 34-wide skill cell + "  │").
 	// midWidth: second divider aligns with the outer general/weapon skill split (col col1W+1).
-	const leftWidth = 38
+	const leftWidth = 36
 	midWidth := col1W(w) - leftWidth - 3
 
 	attrLines := []string{
@@ -688,15 +692,17 @@ func (m Model) viewMagic(w int) string {
 	}
 	var rightLines []string
 	rightLines = append(rightLines, sHdr.Render(" PREPARED SPELLS")+"  "+count)
-	if len(prepared) == 0 {
+	// Prepared spells and always-castable magic tricks, sorted alphabetically together.
+	entries := preparedColumnOrder(m.char)
+	if len(entries) == 0 {
 		rightLines = append(rightLines, " "+m.ftext(idPreparedEmpty, "(none — press 'g' to open grimoire)"))
 	} else {
-		for i, sp := range prepared {
-			name := sp.Name
+		for _, e := range entries {
+			name := e.name
 			if name == "" {
 				name = unnamed
 			}
-			rightLines = append(rightLines, " "+m.ftext(idPreparedSpell(i), fmt.Sprintf("%s  (%s R%d)", name, sp.School, sp.Rank)))
+			rightLines = append(rightLines, " "+m.ftext(e.id, name))
 		}
 	}
 	rightLines = append(rightLines, sDim.Render(" g study/record in grimoire"))
@@ -723,11 +729,18 @@ func (m Model) viewMagicPicker(title string) string {
 	b.WriteString(sDim.Render(strings.Repeat("─", 40)) + "\n")
 	start, end := pickWindow(m.pickSelected, len(m.magicPicks), m.visibleRows())
 	for i := start; i < end; i++ {
-		opt := m.magicPicks[i].display
-		if i == m.pickSelected {
-			b.WriteString(sSel.Render("  › "+opt) + "\n")
-		} else {
-			b.WriteString("    " + opt + "\n")
+		p := m.magicPicks[i]
+		switch {
+		case i == m.pickSelected && p.selectable:
+			b.WriteString(sSel.Render("  › "+p.display) + "\n")
+		case i == m.pickSelected && !p.selectable:
+			// Cursor can rest here so players can read the entry, but it stays dim to
+			// signal it cannot be selected.
+			b.WriteString(sDim.Render("  › "+p.display) + "\n")
+		case !p.selectable:
+			b.WriteString(sDim.Render("    "+p.display) + "\n")
+		default:
+			b.WriteString("    " + p.display + "\n")
 		}
 	}
 	b.WriteString(sDim.Render(strings.Repeat("─", 40)) + "\n")
@@ -751,6 +764,7 @@ func (m Model) viewGrimoire() string {
 	b.WriteString(sHdr.Render(" GRIMOIRE") + "  " + count + "\n")
 	b.WriteString(sep + "\n")
 
+	b.WriteString(sHdr.Render(" SPELLS") + "\n")
 	nSpells := len(m.char.Grimoire)
 	if nSpells == 0 {
 		b.WriteString(sDim.Render(" (no spells — press 'a' to record one)") + "\n")
@@ -764,9 +778,9 @@ func (m Model) viewGrimoire() string {
 			if name == "" {
 				name = unnamed
 			}
-			line := " " + box + " " + nameCol.Render(name) + " " + sDim.Render(fmt.Sprintf("(%s R%d)", sp.School, sp.Rank))
+			line := " " + box + " " + nameCol.Render(name)
 			if i == m.grimoireSel {
-				line = sSel.Render(" "+box+" "+nameCol.Render(name)+" ") + sDim.Render(fmt.Sprintf("(%s R%d)", sp.School, sp.Rank))
+				line = sSel.Render(" " + box + " " + nameCol.Render(name))
 			}
 			b.WriteString(line + "\n")
 		}
@@ -774,16 +788,16 @@ func (m Model) viewGrimoire() string {
 
 	b.WriteString(sHdr.Render(" MAGIC TRICKS") + "\n")
 	if len(m.char.MagicTricks) == 0 {
-		b.WriteString(sDim.Render(" (none — press 't' to add)") + "\n")
+		b.WriteString(sDim.Render(" (none — press 'a' to add)") + "\n")
 	} else {
 		for i, tr := range m.char.MagicTricks {
 			name := tr.Name
 			if name == "" {
 				name = unnamed
 			}
-			line := "     " + nameCol.Render(name) + " " + sDim.Render("("+string(tr.School)+")")
+			line := "     " + nameCol.Render(name)
 			if nSpells+i == m.grimoireSel {
-				line = sSel.Render("     "+nameCol.Render(name)+" ") + sDim.Render("("+string(tr.School)+")")
+				line = sSel.Render("     " + nameCol.Render(name))
 			}
 			b.WriteString(line + "\n")
 		}
@@ -920,7 +934,7 @@ func (m Model) viewSpellDetail() string {
 	}
 	b.WriteString(sHdr.Render(" "+strings.ToUpper(name)) + "\n")
 	b.WriteString(sep + "\n")
-	schoolRank := fmt.Sprintf(" School: %s   Rank: %d\n", sp.School, sp.Rank)
+	schoolRank := fmt.Sprintf(" School: %s   Rank: %d   WP Cost: %s\n", sp.School, sp.Rank, character.SpellWPCost(sp))
 	b.WriteString(schoolRank)
 	rng := sp.Range
 	if rng == "" {
@@ -937,6 +951,29 @@ func (m Model) viewSpellDetail() string {
 	if sp.Description != "" {
 		b.WriteString("\n")
 		b.WriteString(" " + wrapText(sp.Description, 62) + "\n")
+	}
+	b.WriteString(sep + "\n")
+	b.WriteString(sDim.Render("  press any key to close") + "\n")
+	return b.String()
+}
+
+// viewTrickDetail is the read-only popup shown for a magic trick. Tricks are always
+// castable and consume no prepared-spell slot.
+func (m Model) viewTrickDetail() string {
+	tr := m.detailTrick
+	var b strings.Builder
+	sep := sDim.Render(strings.Repeat("─", 64))
+	name := tr.Name
+	if name == "" {
+		name = unnamed
+	}
+	b.WriteString(sHdr.Render(" "+strings.ToUpper(name)) + "\n")
+	b.WriteString(sep + "\n")
+	schoolLine := fmt.Sprintf(" School: %s   WP Cost: 1\n", tr.School)
+	b.WriteString(schoolLine)
+	if tr.Description != "" {
+		b.WriteString("\n")
+		b.WriteString(" " + wrapText(tr.Description, 62) + "\n")
 	}
 	b.WriteString(sep + "\n")
 	b.WriteString(sDim.Render("  press any key to close") + "\n")

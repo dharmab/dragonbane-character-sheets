@@ -1,10 +1,40 @@
 package ui
 
 import (
+	"slices"
+	"strings"
+
 	"charm.land/bubbles/v2/textinput"
 	tea "charm.land/bubbletea/v2"
 	"github.com/dharmab/dragonbane-charsheet/internal/character"
 )
+
+// preparedEntry is one row in the prepared-magic column: a focusable field id paired
+// with the display name used to sort the column.
+type preparedEntry struct {
+	id   fieldID
+	name string
+}
+
+// preparedColumnOrder returns the prepared spells and magic tricks as a single list
+// sorted alphabetically by name. Indices in the ids still address PreparedSpells() and
+// MagicTricks respectively, so sorting only affects display/navigation order. Both the
+// navigation grid (visualLayout) and the renderer (view.go) use this, keeping them in
+// sync.
+func preparedColumnOrder(c *character.Character) []preparedEntry {
+	prepared := c.PreparedSpells()
+	entries := make([]preparedEntry, 0, len(prepared)+len(c.MagicTricks))
+	for i, sp := range prepared {
+		entries = append(entries, preparedEntry{id: idPreparedSpell(i), name: sp.Name})
+	}
+	for i, tr := range c.MagicTricks {
+		entries = append(entries, preparedEntry{id: idPreparedTrick(i), name: tr.Name})
+	}
+	slices.SortStableFunc(entries, func(a, b preparedEntry) int {
+		return strings.Compare(strings.ToLower(a.name), strings.ToLower(b.name))
+	})
+	return entries
+}
 
 type fieldKind int
 
@@ -52,6 +82,7 @@ const (
 	famMagicSkillAdv   // index → Character.MagicSkills
 	famMagicEmpty
 	famPreparedSpell // index → Character.PreparedSpells()
+	famPreparedTrick // index → Character.MagicTricks (always castable; no slot)
 	famPreparedEmpty
 )
 
@@ -97,6 +128,7 @@ func idHab(i int) fieldID          { return fieldID{famHab, i} }
 func idMagicSkillLevel(i int) fieldID { return fieldID{famMagicSkillLevel, i} }
 func idMagicSkillAdv(i int) fieldID   { return fieldID{famMagicSkillAdv, i} }
 func idPreparedSpell(i int) fieldID   { return fieldID{famPreparedSpell, i} }
+func idPreparedTrick(i int) fieldID   { return fieldID{famPreparedTrick, i} }
 
 type field struct {
 	id      fieldID
@@ -205,15 +237,21 @@ type Model struct {
 
 	spellDetailMode bool            // read-only spell description popup
 	detailSpell     character.Spell // spell shown in the detail popup
+
+	trickDetailMode bool                 // read-only trick description popup
+	detailTrick     character.MagicTrick // trick shown in the detail popup
 }
 
 // namePick is one row in the grimoire add picker: name is the underlying predefined
 // name ("" for a Custom… entry), display is the label shown, and trick distinguishes
-// magic tricks from spells (they go to different lists and editors).
+// magic tricks from spells (they go to different lists and editors). selectable is false
+// for spells/tricks whose school or prerequisites the character lacks (shown dimmed at
+// the bottom, like the heroic-ability picker).
 type namePick struct {
-	name    string
-	display string
-	trick   bool
+	name       string
+	display    string
+	trick      bool
+	selectable bool
 }
 
 // visualLayout is the single source of truth for where every focusable field
@@ -299,24 +337,16 @@ func visualLayout(c *character.Character) [][]fieldID {
 			magicSkillRows = append(magicSkillRows, []fieldID{idMagicSkillLevel(i), idMagicSkillAdv(i)})
 		}
 	}
+	// Prepared spells and always-castable magic tricks, sorted alphabetically. If
+	// neither exists, a single placeholder row.
 	var preparedRows [][]fieldID
-	if prepared := c.PreparedSpells(); len(prepared) == 0 {
+	for _, e := range preparedColumnOrder(c) {
+		preparedRows = append(preparedRows, []fieldID{e.id})
+	}
+	if len(preparedRows) == 0 {
 		preparedRows = append(preparedRows, []fieldID{idPreparedEmpty})
-	} else {
-		for i := range prepared {
-			preparedRows = append(preparedRows, []fieldID{idPreparedSpell(i)})
-		}
 	}
-	for r := range max(len(magicSkillRows), len(preparedRows)) {
-		var row []fieldID
-		if r < len(magicSkillRows) {
-			row = append(row, magicSkillRows[r]...)
-		}
-		if r < len(preparedRows) {
-			row = append(row, preparedRows[r]...)
-		}
-		rows = append(rows, row)
-	}
+	rows = append(rows, zipColumns(magicSkillRows, preparedRows)...)
 
 	// Gear section
 	rows = append(rows, []fieldID{idArmor, idHelmet, idWeaponAtHand(0), idWeaponAtHand(1), idWeaponAtHand(2)})
@@ -340,17 +370,36 @@ func visualLayout(c *character.Character) [][]fieldID {
 			tinyRows = append(tinyRows, []fieldID{idTiny(i)})
 		}
 	}
-	for r := range max(len(invRows), len(tinyRows)) {
+	rows = append(rows, zipColumns(invRows, tinyRows)...)
+
+	return rows
+}
+
+// zipColumns lays two column groups side by side into rows. When one side has fewer rows
+// than the other, the short side is padded with gap placeholders so each column keeps a
+// fixed horizontal position — otherwise vertical navigation drifts between columns (it
+// clamps to the shorter row's width). Left rows are assumed uniform in width.
+func zipColumns(left, right [][]fieldID) [][]fieldID {
+	gap := fieldID{} // famNone: never focusable
+	leftWidth := 0
+	if len(left) > 0 {
+		leftWidth = len(left[0])
+	}
+	rows := make([][]fieldID, 0, max(len(left), len(right)))
+	for r := range max(len(left), len(right)) {
 		var row []fieldID
-		if r < len(invRows) {
-			row = append(row, invRows[r]...)
+		if r < len(left) {
+			row = append(row, left[r]...)
+		} else {
+			for range leftWidth {
+				row = append(row, gap)
+			}
 		}
-		if r < len(tinyRows) {
-			row = append(row, tinyRows[r]...)
+		if r < len(right) {
+			row = append(row, right[r]...)
 		}
 		rows = append(rows, row)
 	}
-
 	return rows
 }
 
@@ -394,7 +443,7 @@ func metaFor(id fieldID) field {
 		return mk(kindInt, secMagic)
 	case famMagicSkillAdv:
 		return mk(kindBool, secMagic)
-	case famMagicEmpty, famPreparedSpell, famPreparedEmpty:
+	case famMagicEmpty, famPreparedSpell, famPreparedTrick, famPreparedEmpty:
 		return mk(kindLabel, secMagic)
 	default:
 		return field{id: id}
@@ -563,13 +612,34 @@ func (m *Model) moveGrid(drow, dcol int) {
 		return
 	}
 
-	// Horizontal navigation stops at visual boundaries — no wrapping; skip gap cells.
+	// Horizontal navigation stops at visual boundaries — no wrapping. A gap cell means
+	// that column's content lives in a row above it: placeholders always sit below a
+	// shorter column (the derived block beside the attributes, or magic skills beside a
+	// longer prepared-spell list). Jump up into that column rather than skipping past it
+	// to an unrelated neighbor; only a genuinely empty column lets the scan continue.
 	for newCol := col + dcol; newCol >= 0 && newCol < len(m.grid[row]); newCol += dcol {
 		if fi := m.grid[row][newCol]; fi >= 0 {
 			m.focus = fi
 			return
 		}
+		if fi := m.focusableAbove(newCol, row); fi >= 0 {
+			m.focus = fi
+			return
+		}
 	}
+}
+
+// focusableAbove returns the nearest focusable field index in the given column, scanning
+// upward from just above row, or -1 if there is none.
+func (m Model) focusableAbove(col, row int) int {
+	for r := row - 1; r >= 0; r-- {
+		if col < len(m.grid[r]) {
+			if fi := m.grid[r][col]; fi >= 0 {
+				return fi
+			}
+		}
+	}
+	return -1
 }
 
 // enumField describes an enum-valued identity field: its ordered options and how

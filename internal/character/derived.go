@@ -1,6 +1,7 @@
 package character
 
 import (
+	"slices"
 	"strconv"
 	"strings"
 )
@@ -182,6 +183,64 @@ func sameSkills(a, b []string) bool {
 		}
 	}
 	return true
+}
+
+// HasSchool reports whether the character knows the given school of magic (has the
+// corresponding magic skill). GeneralMagic has no skill of its own: it is available to
+// anyone who knows at least one school.
+func (c *Character) HasSchool(s School) bool {
+	if s == GeneralMagic {
+		return len(c.MagicSkills) > 0
+	}
+	return slices.ContainsFunc(c.MagicSkills, func(sk Skill) bool { return sk.Name == string(s) })
+}
+
+// KnowsSpell reports whether the named spell is already in the character's grimoire.
+func (c *Character) KnowsSpell(name string) bool {
+	return slices.ContainsFunc(c.Grimoire, func(sp Spell) bool { return sp.Name == name })
+}
+
+// KnowsTrick reports whether the named magic trick is already recorded.
+func (c *Character) KnowsTrick(name string) bool {
+	return slices.ContainsFunc(c.MagicTricks, func(tr MagicTrick) bool { return tr.Name == name })
+}
+
+// SpellWPCost returns the WP-cost label shown for a spell. Casting costs 2 WP at power
+// level 1, plus 2 WP for each additional power level. Spells that can be cast at a higher
+// power level (their description refers to power levels) show the 2/4/6 progression; the
+// rest cost a flat 2 WP. Magic tricks always cost 1 WP and are handled separately.
+func SpellWPCost(sp Spell) string {
+	if strings.Contains(strings.ToLower(sp.Description), "power level") {
+		return "2/4/6"
+	}
+	return "2"
+}
+
+// IsPredefinedSpell reports whether name matches a spell in the core rulebook library.
+// Predefined spells are canonical and not user-editable; only custom spells can be edited.
+func IsPredefinedSpell(name string) bool {
+	return slices.ContainsFunc(PredefinedSpells, func(sp Spell) bool { return sp.Name == name })
+}
+
+// IsPredefinedTrick reports whether name matches a trick in the core rulebook library.
+func IsPredefinedTrick(name string) bool {
+	return slices.ContainsFunc(PredefinedTricks, func(tr MagicTrick) bool { return tr.Name == name })
+}
+
+// SpellAvailable reports whether the character can record a spell: they must know its
+// school and satisfy its prerequisites. Prerequisites name other spells (any one
+// suffices, matching RequirementMet); the school requirement lives in Spell.School.
+func SpellAvailable(c *Character, sp Spell) bool {
+	if !c.HasSchool(sp.School) {
+		return false
+	}
+	return len(sp.Prerequisites) == 0 || slices.ContainsFunc(sp.Prerequisites, c.KnowsSpell)
+}
+
+// TrickAvailable reports whether the character can record a magic trick: they must know
+// its school.
+func TrickAvailable(c *Character, tr MagicTrick) bool {
+	return c.HasSchool(tr.School)
 }
 
 // RequirementMet reports whether the character satisfies a heroic ability's skill

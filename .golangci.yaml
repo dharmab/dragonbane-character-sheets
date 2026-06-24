@@ -150,6 +150,15 @@ linters:
       - third_party$
       - builtin$
       - examples$
+    rules:
+      # magic.go is a transcribed data table from the rulebook: spell names, ranges,
+      # and casting requirements repeat by nature. Turning them into constants would
+      # only obscure the table, so goconst is not useful here. magic_test.go is covered
+      # too, since goconst counts occurrences across the whole package and would
+      # otherwise flag the test's spell literals against the data table.
+      - path: internal/character/magic.*\.go
+        linters:
+          - goconst
 issues:
   max-same-issues: 0
 formatters:

@@ -2,6 +2,7 @@ package ui
 
 import (
 	"fmt"
+	"slices"
 	"strconv"
 	"strings"
 
@@ -66,6 +67,14 @@ func (m Model) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 			return m, tea.Quit
 		}
 		m.spellDetailMode = false
+		return m, nil
+	}
+
+	if m.trickDetailMode {
+		if key == keyQuit {
+			return m, tea.Quit
+		}
+		m.trickDetailMode = false
 		return m, nil
 	}
 
@@ -309,6 +318,18 @@ func (m Model) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 				if i := f.id.index; i >= 0 && i < len(prepared) {
 					m.detailSpell = prepared[i]
 					m.spellDetailMode = true
+				}
+				return m, nil
+			}
+		case famPreparedTrick:
+			switch key {
+			case keyGrimoire:
+				m.openGrimoire()
+				return m, nil
+			case keyEnter:
+				if i := f.id.index; i >= 0 && i < len(m.char.MagicTricks) {
+					m.detailTrick = m.char.MagicTricks[i]
+					m.trickDetailMode = true
 				}
 				return m, nil
 			}
@@ -976,11 +997,25 @@ func (m Model) handleGrimoireKey(key string) (tea.Model, tea.Cmd) {
 		}
 		return m, nil
 	case keyEnter:
+		// Predefined spells/tricks are canonical: enter shows a read-only detail popup.
+		// Only custom entries open the editor.
 		if m.grimoireSel < nSpells {
+			sp := m.char.Grimoire[m.grimoireSel]
+			if character.IsPredefinedSpell(sp.Name) {
+				m.detailSpell = sp
+				m.spellDetailMode = true
+				return m, nil
+			}
 			m.startSpellEdit(m.grimoireSel)
 			return m, textinput.Blink
 		}
 		if ti := m.grimoireSel - nSpells; ti >= 0 && ti < len(m.char.MagicTricks) {
+			tr := m.char.MagicTricks[ti]
+			if character.IsPredefinedTrick(tr.Name) {
+				m.detailTrick = tr
+				m.trickDetailMode = true
+				return m, nil
+			}
 			m.startTrickEdit(ti)
 			return m, textinput.Blink
 		}
@@ -1038,20 +1073,41 @@ func (m *Model) applyMagicSkillPick() {
 }
 
 // openAddMagicPicker builds the grimoire add picker. Spells and tricks are recorded
-// through the same picker (a single 'a' action): the Custom… entries come first, then
-// any predefined spells, then any predefined tricks (tagged via namePick.trick).
+// through the same picker (a single 'a' action). Like the heroic-ability picker, the
+// Custom… entries come first, then everything the character can record (school and
+// prerequisites met) sorted by name, then the rest dimmed and sorted by name.
 func (m *Model) openAddMagicPicker() {
 	m.magicPicks = m.magicPicks[:0]
 	m.magicPicks = append(m.magicPicks,
-		namePick{display: "Custom Spell…"},
-		namePick{display: "Custom Trick…", trick: true},
+		namePick{display: "Custom Spell…", selectable: true},
+		namePick{display: "Custom Trick…", trick: true, selectable: true},
 	)
+	var avail, unavail []namePick
+	add := func(p namePick) {
+		if p.selectable {
+			avail = append(avail, p)
+		} else {
+			unavail = append(unavail, p)
+		}
+	}
+	// Spells and tricks already recorded are omitted: each can be learned only once.
 	for _, sp := range character.PredefinedSpells {
-		m.magicPicks = append(m.magicPicks, namePick{name: sp.Name, display: sp.Name})
+		if m.char.KnowsSpell(sp.Name) {
+			continue
+		}
+		add(namePick{name: sp.Name, display: sp.Name, selectable: character.SpellAvailable(m.char, sp)})
 	}
 	for _, tr := range character.PredefinedTricks {
-		m.magicPicks = append(m.magicPicks, namePick{name: tr.Name, display: tr.Name + " (trick)", trick: true})
+		if m.char.KnowsTrick(tr.Name) {
+			continue
+		}
+		add(namePick{name: tr.Name, display: tr.Name, trick: true, selectable: character.TrickAvailable(m.char, tr)})
 	}
+	byName := func(a, b namePick) int { return strings.Compare(a.display, b.display) }
+	slices.SortFunc(avail, byName)
+	slices.SortFunc(unavail, byName)
+	m.magicPicks = append(m.magicPicks, avail...)
+	m.magicPicks = append(m.magicPicks, unavail...)
 	m.pickSelected = 0
 	m.pickMagic = true
 	m.picking = true
@@ -1062,6 +1118,9 @@ func (m *Model) applyMagicPick() {
 		return
 	}
 	pick := m.magicPicks[m.pickSelected]
+	if !pick.selectable {
+		return
+	}
 	if pick.trick {
 		m.addTrick(pick.name)
 		return
@@ -1084,6 +1143,9 @@ func (m *Model) addSpell(name string) {
 		m.startSpellEdit(idx)
 		return
 	}
+	if m.char.KnowsSpell(name) { // a spell can be learned only once
+		return
+	}
 	for _, sp := range character.PredefinedSpells {
 		if sp.Name == name {
 			cp := sp
@@ -1104,6 +1166,9 @@ func (m *Model) addTrick(name string) {
 		idx := len(m.char.MagicTricks) - 1
 		m.grimoireSel = len(m.char.Grimoire) + idx
 		m.startTrickEdit(idx)
+		return
+	}
+	if m.char.KnowsTrick(name) { // a trick can be learned only once
 		return
 	}
 	for _, tr := range character.PredefinedTricks {

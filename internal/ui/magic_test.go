@@ -134,6 +134,79 @@ func TestGrimoireAddTrick(t *testing.T) {
 	}
 }
 
+func TestNoDuplicatePredefinedSpell(t *testing.T) {
+	t.Parallel()
+	m := newTestModel(t)
+	name := "Fireball"
+	m.addSpell(name)
+	m.addSpell(name) // a spell can be learned only once
+	if len(m.char.Grimoire) != 1 {
+		t.Fatalf("grimoire = %d; want 1 (no duplicates)", len(m.char.Grimoire))
+	}
+	// The add picker omits a spell that is already known.
+	m.openAddMagicPicker()
+	for _, p := range m.magicPicks {
+		if p.name == name {
+			t.Errorf("known spell %q should be omitted from the add picker", name)
+		}
+	}
+}
+
+func TestPredefinedSpellViewOnly(t *testing.T) {
+	t.Parallel()
+	m := newTestModel(t)
+	m.char.Grimoire = []character.Spell{{Name: "Pillar", School: character.Elementalism, Rank: 1}}
+	m.rebuildFields()
+	m.openGrimoire() // cursor on the spell
+	m = send(m, "enter")
+	if m.spellMode {
+		t.Error("predefined spell should not open the editor")
+	}
+	if !m.spellDetailMode {
+		t.Error("predefined spell enter should open the read-only detail")
+	}
+}
+
+func TestCustomSpellEditable(t *testing.T) {
+	t.Parallel()
+	m := newTestModel(t)
+	m.char.Grimoire = []character.Spell{{Name: "Homebrew Bolt", School: character.Animism, Rank: 1}}
+	m.rebuildFields()
+	m.openGrimoire()
+	m = send(m, "enter")
+	if !m.spellMode {
+		t.Error("custom spell enter should open the editor")
+	}
+}
+
+func TestPreparedColumnNavigationDoesNotDrift(t *testing.T) {
+	t.Parallel()
+	m := newTestModel(t)
+	// One magic skill (left column) but several prepared spells (right column). The right
+	// column must keep its horizontal position so up/down stays within it.
+	m.char.MagicSkills = []character.Skill{{Name: character.SkillAnimism, Attribute: character.INT, Level: 12}}
+	m.char.Grimoire = []character.Spell{
+		{Name: "Alpha", School: character.Animism, Prepared: true},
+		{Name: "Bravo", School: character.Animism, Prepared: true},
+	}
+	m.rebuildFields()
+
+	// Prepared spells are sorted by name, so index 1 is "Bravo".
+	focusID(t, &m, idPreparedSpell(1))
+	m = send(m, "up")
+	if got := m.currentField().id; got != idPreparedSpell(0) {
+		t.Errorf("up from second prepared spell = %+v; want first prepared spell", got)
+	}
+
+	// Left from a prepared spell with no magic skill beside its row still reaches the
+	// magic-skills column (the nearest skill row above).
+	focusID(t, &m, idPreparedSpell(1))
+	m = send(m, "left")
+	if fam := m.currentField().id.family; fam != famMagicSkillLevel && fam != famMagicSkillAdv {
+		t.Errorf("left from stranded prepared spell landed on %+v; want a magic-skill field", m.currentField().id)
+	}
+}
+
 func TestMagicViewsRender(t *testing.T) {
 	t.Parallel()
 	m := newTestModel(t)
@@ -188,5 +261,34 @@ func TestPreparedSpellDetail(t *testing.T) {
 	m = send(m, "space") // any key closes
 	if m.spellDetailMode {
 		t.Error("detail popup should close on any key")
+	}
+}
+
+func TestPreparedTrickDetail(t *testing.T) {
+	t.Parallel()
+	m := newTestModel(t)
+	// A trick with no prepared spells: it still appears in the prepared column and is
+	// focusable, since tricks are always castable and consume no slot.
+	trickName := "Puff of Smoke"
+	m.char.MagicTricks = []character.MagicTrick{{Name: trickName, School: character.Elementalism, Description: "light a flame"}}
+	m.rebuildFields()
+	if m.fieldIndex(idPreparedTrick(0)) < 0 {
+		t.Fatal("a magic trick should have a focusable row in the prepared column")
+	}
+	// Tricks do not consume a prepared-spell slot.
+	if m.char.PreparedCount() != 0 {
+		t.Errorf("prepared count = %d; want 0 (tricks consume no slot)", m.char.PreparedCount())
+	}
+	focusID(t, &m, idPreparedTrick(0))
+	m = send(m, "enter")
+	if !m.trickDetailMode {
+		t.Fatal("enter on a prepared trick should open the detail popup")
+	}
+	if m.detailTrick.Name != trickName {
+		t.Errorf("detail trick = %q; want %q", m.detailTrick.Name, trickName)
+	}
+	m = send(m, "space") // any key closes
+	if m.trickDetailMode {
+		t.Error("trick detail popup should close on any key")
 	}
 }

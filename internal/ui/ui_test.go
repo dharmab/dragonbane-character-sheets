@@ -86,6 +86,19 @@ func TestNavigationHorizontalNoWrap(t *testing.T) {
 	}
 }
 
+func TestNavigationRightFromWILReachesDerived(t *testing.T) {
+	t.Parallel()
+	// WIL (attribute index 4) sits at row 2 col 1; the derived block (current HP) is at
+	// row 1 col 2. Right should jump up into the derived column, not skip past the empty
+	// placeholders to a condition.
+	m := newTestModel(t)
+	focusID(t, &m, idAttr(4)) // WIL
+	m = send(m, "right")
+	if got := m.currentField().id; got != idCurrentHP {
+		t.Errorf("right from WIL = %+v; want current HP", got)
+	}
+}
+
 func TestNavigationSkipsGapCells(t *testing.T) {
 	t.Parallel()
 	// currentHP sits at row 1 col 2; the cells below it (rows 2-3 col 2) are gap

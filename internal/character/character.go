@@ -96,9 +96,10 @@ const (
 	DurStretch       Duration = "Stretch"
 	DurShift         Duration = "Shift"
 	DurConcentration Duration = "Concentration"
+	DurPermanent     Duration = "Permanent"
 )
 
-var AllDurations = []Duration{DurInstant, DurRound, DurStretch, DurShift, DurConcentration}
+var AllDurations = []Duration{DurInstant, DurRound, DurStretch, DurShift, DurConcentration, DurPermanent}
 
 const (
 	// DefaultAttribute is the starting value for every attribute on a blank sheet
@@ -145,7 +146,7 @@ type HeroicAbility struct {
 // character currently has ready to cast (limited by INT — see PreparedSpellLimit).
 // Prerequisites names other grimoire spells (the character must know at least one to
 // learn this one); Requirements are free-text casting requirements. WP cost is not
-// stored: it is a simple, fixed function of the spell's rank, so the player adjusts WP
+// stored: casting costs 2 WP per power level (see SpellWPCost), so the player adjusts WP
 // manually.
 type Spell struct {
 	Name          string      `json:"name"`
@@ -287,14 +288,6 @@ var MagicSkillDefs = []Skill{
 	{Name: SkillElementalism, Attribute: INT},
 	{Name: SkillMentalism, Attribute: INT},
 }
-
-// PredefinedSpells and PredefinedTricks are the core-rulebook spell and magic-trick
-// libraries offered by the Grimoire's add-pickers (alongside a Custom… entry). They are
-// populated in a later commit; the add-pickers already work with the Custom… entry.
-var (
-	PredefinedSpells []Spell
-	PredefinedTricks []MagicTrick
-)
 
 // Weapon-skill requirement groups used by several heroic abilities. The character
 // needs any ONE of the listed skills (at the requirement level) to qualify.
