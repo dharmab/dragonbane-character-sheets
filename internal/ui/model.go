@@ -68,8 +68,17 @@ const (
 	famSkillLevel // index → Character.Skills
 	famSkillAdv   // index → Character.Skills
 	famArmor
+	famArmorRating
+	famArmorBaneSneak
+	famArmorBaneEvade
+	famArmorBaneAcro
 	famHelmet
+	famHelmetRating
+	famHelmetBaneAware
+	famHelmetBaneRanged
 	famWeaponAtHand // index → Character.WeaponsAtHand
+	famWeaponRange  // index → Character.WeaponsAtHand
+	famWeaponDur    // index → Character.WeaponsAtHand
 	famInvName      // index → Character.Inventory
 	famInvWeight    // index → Character.Inventory
 	famInvEmpty
@@ -106,7 +115,14 @@ var (
 	idRestRound     = fieldID{family: famRestRound}
 	idRestStretch   = fieldID{family: famRestStretch}
 	idArmor         = fieldID{family: famArmor}
+	idArmorRating   = fieldID{family: famArmorRating}
+	idArmorSneak    = fieldID{family: famArmorBaneSneak}
+	idArmorEvade    = fieldID{family: famArmorBaneEvade}
+	idArmorAcro     = fieldID{family: famArmorBaneAcro}
 	idHelmet        = fieldID{family: famHelmet}
+	idHelmetRating  = fieldID{family: famHelmetRating}
+	idHelmetAware   = fieldID{family: famHelmetBaneAware}
+	idHelmetRanged  = fieldID{family: famHelmetBaneRanged}
 	idInvEmpty      = fieldID{family: famInvEmpty}
 	idTinyEmpty     = fieldID{family: famTinyEmpty}
 	idHabEmpty      = fieldID{family: famHabEmpty}
@@ -119,6 +135,8 @@ func idCondition(i int) fieldID    { return fieldID{famCondition, i} }
 func idSkillLevel(i int) fieldID   { return fieldID{famSkillLevel, i} }
 func idSkillAdv(i int) fieldID     { return fieldID{famSkillAdv, i} }
 func idWeaponAtHand(i int) fieldID { return fieldID{famWeaponAtHand, i} }
+func idWeaponRange(i int) fieldID  { return fieldID{famWeaponRange, i} }
+func idWeaponDur(i int) fieldID    { return fieldID{famWeaponDur, i} }
 func idInvName(i int) fieldID      { return fieldID{famInvName, i} }
 func idInvWeight(i int) fieldID    { return fieldID{famInvWeight, i} }
 func idTiny(i int) fieldID         { return fieldID{famTiny, i} }
@@ -189,6 +207,20 @@ type Model struct {
 	weaknessActive int // 0 = name, 1 = description
 	weaknessName   textinput.Model
 	weaknessDesc   textinput.Model
+
+	// Item edit modal. itemTarget points at the item being edited, which lives in
+	// either a gear slot or the inventory; the modal mutates it in place. Category
+	// and grip are enums cycled with ←/→; everything else is a text input.
+	itemMode     bool
+	itemActive   int // one of the itemField* constants
+	itemTarget   *character.Item
+	itemName     textinput.Model
+	itemWeight   textinput.Model
+	itemRating   textinput.Model
+	itemRange    textinput.Model
+	itemDamage   textinput.Model
+	itemDur      textinput.Model
+	itemFeatures textinput.Model
 
 	pickAbility  bool          // true when the picker is choosing a heroic ability to add
 	abilityPicks []abilityPick // options for the ability picker (Custom first, then met, then unmet)
@@ -348,8 +380,24 @@ func visualLayout(c *character.Character) [][]fieldID {
 	}
 	rows = append(rows, zipColumns(magicSkillRows, preparedRows)...)
 
-	// Gear section
-	rows = append(rows, []fieldID{idArmor, idHelmet, idWeaponAtHand(0), idWeaponAtHand(1), idWeaponAtHand(2)})
+	// Gear section. Each slot's name is always focusable; its stat fields appear
+	// only when the slot holds an item (Name != ""). See view.go viewGear.
+	armorRow := []fieldID{idArmor}
+	if c.Armor.Name != "" {
+		armorRow = append(armorRow, idArmorRating, idArmorSneak, idArmorEvade, idArmorAcro)
+	}
+	helmetRow := []fieldID{idHelmet}
+	if c.Helmet.Name != "" {
+		helmetRow = append(helmetRow, idHelmetRating, idHelmetAware, idHelmetRanged)
+	}
+	rows = append(rows, armorRow, helmetRow)
+	for i := range 3 {
+		weaponRow := []fieldID{idWeaponAtHand(i)}
+		if i < len(c.WeaponsAtHand) && c.WeaponsAtHand[i].Name != "" {
+			weaponRow = append(weaponRow, idWeaponRange(i), idWeaponDur(i))
+		}
+		rows = append(rows, weaponRow)
+	}
 	// Inventory and tiny items rendered side by side.
 	var invRows [][]fieldID
 	if len(c.Inventory) == 0 {
@@ -427,6 +475,10 @@ func metaFor(id fieldID) field {
 		return mk(kindBool, secSkills)
 	case famArmor, famHelmet, famWeaponAtHand:
 		return mk(kindText, secGear)
+	case famArmorRating, famHelmetRating, famWeaponRange, famWeaponDur:
+		return mk(kindInt, secGear)
+	case famArmorBaneSneak, famArmorBaneEvade, famArmorBaneAcro, famHelmetBaneAware, famHelmetBaneRanged:
+		return mk(kindBool, secGear)
 	case famInvName:
 		return mk(kindText, secInventory)
 	case famInvWeight:
@@ -541,6 +593,28 @@ func New(c *character.Character, path string) Model {
 	td.CharLimit = 512
 	td.SetWidth(60)
 
+	itName := textinput.New()
+	itName.CharLimit = 256
+	itName.SetWidth(40)
+	itWeight := textinput.New()
+	itWeight.CharLimit = 3
+	itWeight.SetWidth(5)
+	itRating := textinput.New()
+	itRating.CharLimit = 3
+	itRating.SetWidth(5)
+	itRange := textinput.New()
+	itRange.CharLimit = 4
+	itRange.SetWidth(6)
+	itDamage := textinput.New()
+	itDamage.CharLimit = 32
+	itDamage.SetWidth(16)
+	itDur := textinput.New()
+	itDur.CharLimit = 3
+	itDur.SetWidth(5)
+	itFeatures := textinput.New()
+	itFeatures.CharLimit = 256
+	itFeatures.SetWidth(40)
+
 	m := Model{
 		char:            c,
 		path:            path,
@@ -556,6 +630,13 @@ func New(c *character.Character, path string) Model {
 		spellDesc:       sd,
 		trickName:       tn,
 		trickDesc:       td,
+		itemName:        itName,
+		itemWeight:      itWeight,
+		itemRating:      itRating,
+		itemRange:       itRange,
+		itemDamage:      itDamage,
+		itemDur:         itDur,
+		itemFeatures:    itFeatures,
 		pickEquipSource: -1,
 	}
 	m.textInput = ti

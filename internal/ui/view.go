@@ -64,6 +64,9 @@ func (m Model) render() string {
 	if m.weaknessMode {
 		return m.viewWeaknessEdit()
 	}
+	if m.itemMode {
+		return m.viewItemEdit()
+	}
 	if m.spellDetailMode {
 		return m.viewSpellDetail()
 	}
@@ -243,6 +246,79 @@ func (m Model) viewWeaknessEdit() string {
 	return b.String()
 }
 
+// viewItemEdit renders the item edit modal, showing only the stat fields that
+// apply to the item's current category.
+func (m Model) viewItemEdit() string {
+	it := m.itemTarget
+	if it == nil {
+		return ""
+	}
+	var b strings.Builder
+	sep := sDim.Render(strings.Repeat("─", 60))
+	b.WriteString(sHdr.Render(" ITEM") + "\n")
+	b.WriteString(sep + "\n")
+
+	textField := func(active int, label, val, view string) {
+		if m.itemActive == active {
+			b.WriteString(" " + label + ": " + sEdit.Render(view) + "\n")
+			return
+		}
+		if val == "" {
+			val = sDim.Render("(empty)")
+		}
+		b.WriteString(" " + label + ": " + val + "\n")
+	}
+	enumField := func(active int, label, val string) {
+		if m.itemActive == active {
+			b.WriteString(sSel.Render(" "+label+": "+val) + "   " + sDim.Render("(←/→ change)") + "\n")
+			return
+		}
+		b.WriteString(" " + label + ": " + val + "\n")
+	}
+	boolField := func(active int, label string, val bool) {
+		check := "[ ] " + label
+		if val {
+			check = "[x] " + label
+		}
+		if m.itemActive == active {
+			b.WriteString(" " + sSel.Render(check) + "\n")
+			return
+		}
+		b.WriteString(" " + check + "\n")
+	}
+
+	textField(itemFieldName, "Name", it.Name, m.itemName.View())
+	textField(itemFieldWeight, "Weight", strconv.Itoa(it.Weight), m.itemWeight.View())
+	cat := string(it.Category)
+	if cat == "" {
+		cat = noneLabel
+	}
+	enumField(itemFieldCategory, "Category", cat)
+
+	switch it.Category {
+	case character.CatArmor:
+		textField(itemFieldRating, "Armor Rating", strconv.Itoa(it.ArmorRating), m.itemRating.View())
+		boolField(itemFieldBaneSneak, "Bane on Sneaking", it.BaneSneaking)
+		boolField(itemFieldBaneEvade, "Bane on Evade", it.BaneEvade)
+		boolField(itemFieldBaneAcro, "Bane on Acrobatics", it.BaneAcrobatics)
+	case character.CatHelmet:
+		textField(itemFieldRating, "Armor Rating", strconv.Itoa(it.ArmorRating), m.itemRating.View())
+		boolField(itemFieldBaneAware, "Bane on Awareness", it.BaneAwareness)
+		boolField(itemFieldBaneRanged, "Bane on Ranged Attacks", it.BaneRanged)
+	case character.CatWeapon:
+		enumField(itemFieldGrip, "Grip", dash(string(it.Grip)))
+		textField(itemFieldRange, "Range", strconv.Itoa(it.Range), m.itemRange.View())
+		textField(itemFieldDamage, "Damage", it.Damage, m.itemDamage.View())
+		textField(itemFieldDur, "Durability", strconv.Itoa(it.Durability), m.itemDur.View())
+		textField(itemFieldFeatures, "Features", strings.Join(it.Features, ", "), m.itemFeatures.View())
+	case character.CatNone: // uncategorized: no extra fields
+	}
+
+	b.WriteString(sep + "\n")
+	b.WriteString(sDim.Render("  tab next   ←/→ change enum   space toggle   enter/esc done") + "\n")
+	return b.String()
+}
+
 // col1W is the shared left-column width used by all multi-column sections,
 // so their dividers land on the same terminal column.
 // 78 is the minimum needed to fit a pair of general skills.
@@ -405,35 +481,79 @@ func (m Model) viewSkills(w int) string {
 }
 
 func (m Model) viewGear() string {
-	lines := make([]string, 0, 3)
-	lines = append(lines, sHdr.Render(" GEAR"))
+	nameCol := lipgloss.NewStyle().Width(16)
+	arCol := lipgloss.NewStyle().Width(2).Align(lipgloss.Right)
+	gripCol := lipgloss.NewStyle().Width(4)
+	dmgCol := lipgloss.NewStyle().Width(8)
+	numCol := lipgloss.NewStyle().Width(3).Align(lipgloss.Right)
 
-	armor := m.char.Armor
-	if armor == "" {
-		armor = "—"
+	nameCell := func(id fieldID, name string) string {
+		if name == "" {
+			name = "—"
+		}
+		return nameCol.Render(m.ftext(id, name))
 	}
-	helmet := m.char.Helmet
-	if helmet == "" {
-		helmet = "—"
+
+	lines := []string{sHdr.Render(" GEAR")}
+
+	// Armor and helmet share a Name/AR/Banes shape; their banes differ.
+	abHdr := sDim.Render(fmt.Sprintf(" %-16s %2s  %s", "Name", "AR", "Banes"))
+
+	lines = append(lines, "", sHdr.Render(" ARMOR"))
+	if a := m.char.Armor; a.Name == "" {
+		lines = append(lines, " "+nameCell(idArmor, ""))
+	} else {
+		banes := strings.Join([]string{
+			m.fbool(idArmorSneak, "Sneaking", a.BaneSneaking),
+			m.fbool(idArmorEvade, "Evade", a.BaneEvade),
+			m.fbool(idArmorAcro, "Acrobatics", a.BaneAcrobatics),
+		}, "  ")
+		lines = append(lines, abHdr,
+			" "+nameCell(idArmor, a.Name)+" "+arCol.Render(m.fnum(idArmorRating, a.ArmorRating))+"  "+banes)
 	}
-	wahParts := make([]string, 0, 3)
+
+	lines = append(lines, "", sHdr.Render(" HELMET"))
+	if h := m.char.Helmet; h.Name == "" {
+		lines = append(lines, " "+nameCell(idHelmet, ""))
+	} else {
+		banes := strings.Join([]string{
+			m.fbool(idHelmetAware, "Awareness", h.BaneAwareness),
+			m.fbool(idHelmetRanged, "Ranged Attacks", h.BaneRanged),
+		}, "  ")
+		lines = append(lines, abHdr,
+			" "+nameCell(idHelmet, h.Name)+" "+arCol.Render(m.fnum(idHelmetRating, h.ArmorRating))+"  "+banes)
+	}
+
+	lines = append(lines, "", sHdr.Render(" WEAPONS"),
+		sDim.Render(fmt.Sprintf(" %-16s %-4s %-8s %3s %3s  %s", "Name", "Grip", "Dmg", "Rng", "Dur", "Features")))
 	for i := range 3 {
-		display := ""
+		var w character.Item
 		if i < len(m.char.WeaponsAtHand) {
-			display = m.char.WeaponsAtHand[i]
+			w = m.char.WeaponsAtHand[i]
 		}
-		if display == "" {
-			display = "—"
+		if w.Name == "" {
+			lines = append(lines, " "+nameCell(idWeaponAtHand(i), ""))
+			continue
 		}
-		wahParts = append(wahParts, m.ftext(idWeaponAtHand(i), display))
+		grip := dash(string(w.Grip))
+		dmg := dash(w.Damage)
+		lines = append(lines, " "+nameCell(idWeaponAtHand(i), w.Name)+" "+
+			gripCol.Render(grip)+" "+dmgCol.Render(dmg)+" "+
+			numCol.Render(m.fnum(idWeaponRange(i), w.Range))+" "+
+			numCol.Render(m.fnum(idWeaponDur(i), w.Durability))+"  "+
+			strings.Join(w.Features, ", "))
 	}
-	lines = append(lines, fmt.Sprintf(" Armor: %s   Helmet: %s   Weapons: %s",
-		m.ftext(idArmor, armor),
-		m.ftext(idHelmet, helmet),
-		strings.Join(wahParts, "  ")))
-	lines = append(lines, sDim.Render(" d doff equipped item → inventory"))
 
+	lines = append(lines, sDim.Render(" enter edit · d doff → inventory · =/- adjust · space toggle bane"))
 	return strings.Join(lines, "\n") + "\n"
+}
+
+// dash returns s, or an em dash placeholder when s is empty.
+func dash(s string) string {
+	if s == "" {
+		return "—"
+	}
+	return s
 }
 
 func (m Model) viewInventoryAndTiny(w int) string {

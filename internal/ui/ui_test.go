@@ -2,6 +2,7 @@ package ui
 
 import (
 	"path/filepath"
+	"strings"
 	"testing"
 
 	tea "charm.land/bubbletea/v2"
@@ -208,8 +209,11 @@ func TestEquipAndDoffRoundTrip(t *testing.T) {
 	}
 	// Slot 0 is Armor; confirm.
 	m = send(m, "enter")
-	if m.char.Armor != chainmail {
-		t.Errorf("armor = %q; want %s", m.char.Armor, chainmail)
+	if m.char.Armor.Name != chainmail {
+		t.Errorf("armor = %q; want %s", m.char.Armor.Name, chainmail)
+	}
+	if m.char.Armor.Category != character.CatArmor {
+		t.Errorf("equipped armor category = %q; want %s", m.char.Armor.Category, character.CatArmor)
 	}
 	if len(m.char.Inventory) != 0 {
 		t.Errorf("inventory should be empty after equip, got %d", len(m.char.Inventory))
@@ -218,11 +222,90 @@ func TestEquipAndDoffRoundTrip(t *testing.T) {
 	// Doff: focus armor, 'd' stows it back into inventory.
 	focusID(t, &m, idArmor)
 	m = send(m, "d")
-	if m.char.Armor != "" {
-		t.Errorf("armor after doff = %q; want empty", m.char.Armor)
+	if m.char.Armor.Name != "" {
+		t.Errorf("armor after doff = %q; want empty", m.char.Armor.Name)
 	}
 	if len(m.char.Inventory) != 1 || m.char.Inventory[0].Name != chainmail {
 		t.Errorf("inventory after doff = %+v; want one %s", m.char.Inventory, chainmail)
+	}
+}
+
+func TestItemModalSetsCategory(t *testing.T) {
+	t.Parallel()
+	m := newTestModel(t)
+	m.char.Inventory = []character.Item{{Name: "Robe", Weight: 1}}
+	m.rebuildFields()
+	focusID(t, &m, idInvName(0))
+
+	m = send(m, "enter") // open item modal
+	if !m.itemMode {
+		t.Fatal("expected item modal open")
+	}
+	m = send(m, "tab") // Name -> Weight
+	m = send(m, "tab") // Weight -> Category
+	if m.itemActive != itemFieldCategory {
+		t.Fatalf("active field = %d; want category", m.itemActive)
+	}
+	m = send(m, "right") // none -> armor
+	if m.itemTarget.Category != character.CatArmor {
+		t.Fatalf("category = %q; want armor", m.itemTarget.Category)
+	}
+	m = send(m, "enter") // commit + close
+	if m.itemMode {
+		t.Fatal("expected modal closed")
+	}
+	if m.char.Inventory[0].Category != character.CatArmor {
+		t.Errorf("inventory item category = %q; want armor", m.char.Inventory[0].Category)
+	}
+}
+
+func TestGearInlineStatEdits(t *testing.T) {
+	t.Parallel()
+	m := newTestModel(t)
+	m.char.Armor = character.Item{Name: "Mail", Weight: 1, Category: character.CatArmor}
+	m.rebuildFields()
+
+	focusID(t, &m, idArmorRating)
+	m = send(m, "=")
+	m = send(m, "=")
+	if m.char.Armor.ArmorRating != 2 {
+		t.Errorf("armor rating = %d; want 2", m.char.Armor.ArmorRating)
+	}
+
+	focusID(t, &m, idArmorSneak)
+	m = send(m, "space")
+	if !m.char.Armor.BaneSneaking {
+		t.Error("expected bane on sneaking toggled on")
+	}
+}
+
+func TestGearAndItemModalRender(t *testing.T) {
+	t.Parallel()
+	m := newTestModel(t)
+	m.width, m.height = 120, 60
+	m.char.Armor = character.Item{Name: "Plate", Weight: 3, Category: character.CatArmor, ArmorRating: 6, BaneSneaking: true}
+	m.char.Helmet = character.Item{Name: "Great Helm", Weight: 1, Category: character.CatHelmet, ArmorRating: 2, BaneAwareness: true}
+	m.char.WeaponsAtHand[0] = character.Item{Name: "Halberd", Weight: 2, Category: character.CatWeapon, Grip: character.Grip2H, Range: 4, Damage: "2d8", Durability: 5, Features: []string{"Long"}}
+	m.rebuildFields()
+
+	out := m.render()
+	for _, want := range []string{"ARMOR", "HELMET", "WEAPONS", "Plate", "Halberd", "2d8"} {
+		if !strings.Contains(out, want) {
+			t.Errorf("gear render missing %q", want)
+		}
+	}
+
+	// Item modal renders the weapon stat fields for a weapon.
+	focusID(t, &m, idWeaponAtHand(0))
+	m = send(m, "enter")
+	if !m.itemMode {
+		t.Fatal("expected item modal open on weapon slot")
+	}
+	modal := m.render()
+	for _, want := range []string{"Grip", "Damage", "Durability", "Features"} {
+		if !strings.Contains(modal, want) {
+			t.Errorf("item modal missing %q", want)
+		}
 	}
 }
 

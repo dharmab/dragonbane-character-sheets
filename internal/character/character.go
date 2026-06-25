@@ -123,9 +123,66 @@ type Weakness struct {
 	Description string `json:"description"`
 }
 
+// ItemCategory tags an item as a piece of equipment so it can carry
+// category-specific stats. An item is at most one category (mutually exclusive).
+type ItemCategory string
+
+const (
+	CatNone   ItemCategory = ""
+	CatArmor  ItemCategory = "armor"
+	CatHelmet ItemCategory = "helmet"
+	CatWeapon ItemCategory = "weapon"
+)
+
+// Grip is how many hands a weapon needs.
+type Grip string
+
+const (
+	Grip1H Grip = "1H"
+	Grip2H Grip = "2H"
+)
+
+// GripOrder is the cycle order for the grip enum field.
+var GripOrder = []Grip{Grip1H, Grip2H}
+
+// Item is anything a character carries or wears. Beyond Name/Weight an item may
+// be tagged with a Category and the stats for that category; the stat fields are
+// omitempty so plain items stay clean in JSON. ArmorRating is shared by armor and
+// helmet (an item is only ever one category).
 type Item struct {
-	Name   string `json:"name"`
-	Weight int    `json:"weight"` // slots consumed; 1 = 1 slot, 2 = 2 slots, etc.
+	Name     string       `json:"name"`
+	Weight   int          `json:"weight"` // slots consumed; 1 = 1 slot, 2 = 2 slots, etc.
+	Category ItemCategory `json:"category,omitempty"`
+	// Armor and helmet
+	ArmorRating int `json:"armor_rating,omitempty"`
+	// Armor banes
+	BaneSneaking   bool `json:"bane_sneaking,omitempty"`
+	BaneEvade      bool `json:"bane_evade,omitempty"`
+	BaneAcrobatics bool `json:"bane_acrobatics,omitempty"`
+	// Helmet banes
+	BaneAwareness bool `json:"bane_awareness,omitempty"`
+	BaneRanged    bool `json:"bane_ranged,omitempty"`
+	// Weapon
+	Grip       Grip     `json:"grip,omitempty"`
+	Range      int      `json:"range,omitempty"`
+	Damage     string   `json:"damage,omitempty"`
+	Durability int      `json:"durability,omitempty"`
+	Features   []string `json:"features,omitempty"`
+}
+
+// UnmarshalJSON accepts either a bare string (the legacy gear-slot format, e.g.
+// "armor": "Chainmail") or a full object, so old character files load unchanged.
+func (it *Item) UnmarshalJSON(data []byte) error {
+	if len(data) > 0 && data[0] == '"' {
+		var s string
+		if err := json.Unmarshal(data, &s); err != nil {
+			return err
+		}
+		*it = Item{Name: s, Weight: 1}
+		return nil
+	}
+	type raw Item
+	return json.Unmarshal(data, (*raw)(it))
 }
 
 // HeroicAbility is a special power a character buys with willpower. The Name may
@@ -191,9 +248,9 @@ type Character struct {
 	StretchRestUsed bool              `json:"stretch_rest_used"`
 	Skills          []Skill           `json:"skills"`
 	Weakness        Weakness          `json:"weakness"`
-	Armor           string            `json:"armor"`
-	Helmet          string            `json:"helmet"`
-	WeaponsAtHand   []string          `json:"weapons_at_hand"` // always 3 elements
+	Armor           Item              `json:"armor"`
+	Helmet          Item              `json:"helmet"`
+	WeaponsAtHand   []Item            `json:"weapons_at_hand"` // always 3 elements
 	Inventory       []Item            `json:"inventory"`
 	TinyItems       []string          `json:"tiny_items"`
 	HeroicAbilities []HeroicAbility   `json:"heroic_abilities"`
@@ -442,7 +499,7 @@ func Default() *Character {
 		CurrentWP:       10,
 		Skills:          skills,
 		Weakness:        Weakness{},
-		WeaponsAtHand:   []string{"", "", ""},
+		WeaponsAtHand:   []Item{{}, {}, {}},
 		Inventory:       []Item{},
 		TinyItems:       []string{},
 		HeroicAbilities: []HeroicAbility{},
@@ -520,7 +577,7 @@ func Load(path string) (*Character, error) {
 	}
 	// Ensure WeaponsAtHand always has exactly 3 slots.
 	for len(c.WeaponsAtHand) < 3 {
-		c.WeaponsAtHand = append(c.WeaponsAtHand, "")
+		c.WeaponsAtHand = append(c.WeaponsAtHand, Item{})
 	}
 	if c.Inventory == nil {
 		c.Inventory = []Item{}
@@ -528,10 +585,31 @@ func Load(path string) (*Character, error) {
 	if c.TinyItems == nil {
 		c.TinyItems = []string{}
 	}
-	// Clamp item weights to minimum 1.
+	// Clamp item weights to minimum 1 for every carried item.
+	clampWeight := func(it *Item) {
+		if it.Weight < 1 {
+			it.Weight = 1
+		}
+	}
 	for i := range c.Inventory {
-		if c.Inventory[i].Weight < 1 {
-			c.Inventory[i].Weight = 1
+		clampWeight(&c.Inventory[i])
+	}
+	clampWeight(&c.Armor)
+	clampWeight(&c.Helmet)
+	for i := range c.WeaponsAtHand {
+		clampWeight(&c.WeaponsAtHand[i])
+	}
+	// Auto-tag items already sitting in gear slots with their slot's category
+	// (legacy files stored slots as plain names with no category).
+	if c.Armor.Name != "" && c.Armor.Category == CatNone {
+		c.Armor.Category = CatArmor
+	}
+	if c.Helmet.Name != "" && c.Helmet.Category == CatNone {
+		c.Helmet.Category = CatHelmet
+	}
+	for i := range c.WeaponsAtHand {
+		if c.WeaponsAtHand[i].Name != "" && c.WeaponsAtHand[i].Category == CatNone {
+			c.WeaponsAtHand[i].Category = CatWeapon
 		}
 	}
 	// Re-derive heroic ability stat bonuses from the predefined set (json:"-", so they

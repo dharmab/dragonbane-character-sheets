@@ -114,6 +114,10 @@ func (m Model) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		return m.handleWeaknessKey(msg)
 	}
 
+	if m.itemMode {
+		return m.handleItemKey(msg)
+	}
+
 	if m.editing {
 		switch key {
 		case keyEnter, keyEsc:
@@ -150,24 +154,19 @@ func (m Model) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 
 	f := m.currentField()
 
-	if f.section == secGear && key == keyDonDoff {
-		switch f.id.family {
-		case famArmor:
-			if m.char.Armor != "" {
-				m.stowGear(&m.char.Armor)
+	if f.section == secGear {
+		slot := m.gearSlotPtr(f.id)
+		switch key {
+		case keyDonDoff:
+			if slot != nil && slot.Name != "" {
+				m.stowGear(slot)
 				return m, nil
 			}
-		case famHelmet:
-			if m.char.Helmet != "" {
-				m.stowGear(&m.char.Helmet)
-				return m, nil
+		case keyEnter:
+			if slot != nil {
+				m.startItemEdit(slot)
+				return m, textinput.Blink
 			}
-		case famWeaponAtHand:
-			if wi := f.id.index; wi >= 0 && wi < len(m.char.WeaponsAtHand) && m.char.WeaponsAtHand[wi] != "" {
-				m.stowGear(&m.char.WeaponsAtHand[wi])
-				return m, nil
-			}
-		default: // other gear fields: nothing to stow
 		}
 	}
 
@@ -180,6 +179,11 @@ func (m Model) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 			m.rebuildFields()
 			m.autoSave()
 			return m, nil
+		case keyEnter:
+			if inBounds {
+				m.startItemEdit(&m.char.Inventory[idx])
+				return m, textinput.Blink
+			}
 		case keyIncr, keyIncrAlt, keyDecr:
 			if f.id.family == famInvName && inBounds {
 				base, qty := character.ParseQty(m.char.Inventory[idx].Name)
@@ -430,18 +434,6 @@ func (m *Model) textFieldTarget() *string {
 	switch f.id.family {
 	case famName:
 		return &m.char.Name
-	case famArmor:
-		return &m.char.Armor
-	case famHelmet:
-		return &m.char.Helmet
-	case famWeaponAtHand:
-		if i := f.id.index; i >= 0 && i < len(m.char.WeaponsAtHand) {
-			return &m.char.WeaponsAtHand[i]
-		}
-	case famInvName:
-		if i := f.id.index; i >= 0 && i < len(m.char.Inventory) {
-			return &m.char.Inventory[i].Name
-		}
 	case famTiny:
 		if i := f.id.index; i >= 0 && i < len(m.char.TinyItems) {
 			return &m.char.TinyItems[i]
@@ -500,22 +492,16 @@ func (m *Model) applyPickerSelection() {
 }
 
 func (m *Model) equipSlotOptions() []string {
-	armor := m.char.Armor
-	if armor == "" {
-		armor = "—"
-	}
-	helmet := m.char.Helmet
-	if helmet == "" {
-		helmet = "—"
+	name := func(it character.Item) string {
+		if it.Name == "" {
+			return "—"
+		}
+		return it.Name
 	}
 	opts := make([]string, 0, 2+len(m.char.WeaponsAtHand))
-	opts = append(opts, "Armor: "+armor, "Helmet: "+helmet)
+	opts = append(opts, "Armor: "+name(m.char.Armor), "Helmet: "+name(m.char.Helmet))
 	for i, w := range m.char.WeaponsAtHand {
-		val := w
-		if val == "" {
-			val = "—"
-		}
-		opts = append(opts, fmt.Sprintf("Weapon %d: %s", i+1, val))
+		opts = append(opts, fmt.Sprintf("Weapon %d: %s", i+1, name(w)))
 	}
 	return opts
 }
@@ -525,27 +511,35 @@ func (m *Model) applyEquip() {
 	if idx < 0 || idx >= len(m.char.Inventory) {
 		return
 	}
-	itemName := m.char.Inventory[idx].Name
+	item := m.char.Inventory[idx]
 
-	var displaced string
+	// Equipping an untagged item into a slot tags it with that slot's category,
+	// matching the auto-tagging Load does for already-slotted items.
+	var displaced character.Item
 	switch m.pickSelected {
 	case 0:
-		displaced = m.char.Armor
-		m.char.Armor = itemName
+		if item.Category == character.CatNone {
+			item.Category = character.CatArmor
+		}
+		displaced, m.char.Armor = m.char.Armor, item
 	case 1:
-		displaced = m.char.Helmet
-		m.char.Helmet = itemName
+		if item.Category == character.CatNone {
+			item.Category = character.CatHelmet
+		}
+		displaced, m.char.Helmet = m.char.Helmet, item
 	default:
 		wi := m.pickSelected - 2
 		if wi >= 0 && wi < len(m.char.WeaponsAtHand) {
-			displaced = m.char.WeaponsAtHand[wi]
-			m.char.WeaponsAtHand[wi] = itemName
+			if item.Category == character.CatNone {
+				item.Category = character.CatWeapon
+			}
+			displaced, m.char.WeaponsAtHand[wi] = m.char.WeaponsAtHand[wi], item
 		}
 	}
 
 	m.char.Inventory = append(m.char.Inventory[:idx], m.char.Inventory[idx+1:]...)
-	if displaced != "" {
-		m.char.Inventory = append(m.char.Inventory, character.Item{Name: displaced, Weight: 1})
+	if displaced.Name != "" {
+		m.char.Inventory = append(m.char.Inventory, displaced)
 	}
 	m.rebuildFields()
 	if m.focus >= len(m.fields) {
@@ -573,6 +567,18 @@ func (m *Model) adjustInt(delta int) {
 	case famInvWeight:
 		if i := f.id.index; i >= 0 && i < len(m.char.Inventory) {
 			m.char.Inventory[i].Weight = max(1, m.char.Inventory[i].Weight+delta)
+		}
+	case famArmorRating:
+		m.char.Armor.ArmorRating = max(0, m.char.Armor.ArmorRating+delta)
+	case famHelmetRating:
+		m.char.Helmet.ArmorRating = max(0, m.char.Helmet.ArmorRating+delta)
+	case famWeaponRange:
+		if i := f.id.index; i >= 0 && i < len(m.char.WeaponsAtHand) {
+			m.char.WeaponsAtHand[i].Range = max(0, m.char.WeaponsAtHand[i].Range+delta)
+		}
+	case famWeaponDur:
+		if i := f.id.index; i >= 0 && i < len(m.char.WeaponsAtHand) {
+			m.char.WeaponsAtHand[i].Durability = max(0, m.char.WeaponsAtHand[i].Durability+delta)
 		}
 	case famMagicSkillLevel:
 		if i := f.id.index; i >= 0 && i < len(m.char.MagicSkills) {
@@ -617,6 +623,16 @@ func (m *Model) toggleBool() {
 		m.char.RoundRestUsed = !m.char.RoundRestUsed
 	case famRestStretch:
 		m.char.StretchRestUsed = !m.char.StretchRestUsed
+	case famArmorBaneSneak:
+		m.char.Armor.BaneSneaking = !m.char.Armor.BaneSneaking
+	case famArmorBaneEvade:
+		m.char.Armor.BaneEvade = !m.char.Armor.BaneEvade
+	case famArmorBaneAcro:
+		m.char.Armor.BaneAcrobatics = !m.char.Armor.BaneAcrobatics
+	case famHelmetBaneAware:
+		m.char.Helmet.BaneAwareness = !m.char.Helmet.BaneAwareness
+	case famHelmetBaneRanged:
+		m.char.Helmet.BaneRanged = !m.char.Helmet.BaneRanged
 	default: // not a boolean field
 	}
 }
@@ -629,12 +645,30 @@ func (m *Model) autoSave() {
 	}
 }
 
-// stowGear moves the item in an equipped gear slot into inventory and clears it.
-func (m *Model) stowGear(slot *string) {
-	m.char.Inventory = append(m.char.Inventory, character.Item{Name: *slot, Weight: 1})
-	*slot = ""
+// stowGear moves the item in an equipped gear slot into inventory and clears the
+// slot. The item keeps its category and stats (tag-only model).
+func (m *Model) stowGear(slot *character.Item) {
+	m.char.Inventory = append(m.char.Inventory, *slot)
+	*slot = character.Item{}
 	m.rebuildFields()
 	m.autoSave()
+}
+
+// gearSlotPtr returns the gear-slot item a gear field belongs to (name or any of
+// its stat fields), or nil if the field is not a gear field.
+func (m *Model) gearSlotPtr(id fieldID) *character.Item {
+	switch id.family {
+	case famArmor, famArmorRating, famArmorBaneSneak, famArmorBaneEvade, famArmorBaneAcro:
+		return &m.char.Armor
+	case famHelmet, famHelmetRating, famHelmetBaneAware, famHelmetBaneRanged:
+		return &m.char.Helmet
+	case famWeaponAtHand, famWeaponRange, famWeaponDur:
+		if i := id.index; i >= 0 && i < len(m.char.WeaponsAtHand) {
+			return &m.char.WeaponsAtHand[i]
+		}
+	default: // not a gear field
+	}
+	return nil
 }
 
 // clampFocus keeps the focus index valid after the field list shrinks.
@@ -1486,4 +1520,299 @@ func splitCSV(s string) []string {
 		}
 	}
 	return out
+}
+
+// atoiOr parses s as an int, returning def when it is empty or malformed.
+func atoiOr(s string, def int) int {
+	if n, err := strconv.Atoi(strings.TrimSpace(s)); err == nil {
+		return n
+	}
+	return def
+}
+
+// Item edit modal.
+
+// Item edit modal field indices. Which fields are shown depends on the item's
+// Category (see itemFieldVisible).
+const (
+	itemFieldName = iota
+	itemFieldWeight
+	itemFieldCategory
+	itemFieldRating     // armor + helmet
+	itemFieldBaneSneak  // armor
+	itemFieldBaneEvade  // armor
+	itemFieldBaneAcro   // armor
+	itemFieldBaneAware  // helmet
+	itemFieldBaneRanged // helmet
+	itemFieldGrip       // weapon
+	itemFieldRange      // weapon
+	itemFieldDamage     // weapon
+	itemFieldDur        // weapon
+	itemFieldFeatures   // weapon
+	itemFieldCount
+)
+
+// itemCategoryOrder is the cycle order for the category enum field.
+var itemCategoryOrder = []character.ItemCategory{
+	character.CatNone, character.CatArmor, character.CatHelmet, character.CatWeapon,
+}
+
+// itemFieldVisible reports whether a modal field applies to the given category.
+func itemFieldVisible(fieldIdx int, cat character.ItemCategory) bool {
+	switch fieldIdx {
+	case itemFieldName, itemFieldWeight, itemFieldCategory:
+		return true
+	case itemFieldRating:
+		return cat == character.CatArmor || cat == character.CatHelmet
+	case itemFieldBaneSneak, itemFieldBaneEvade, itemFieldBaneAcro:
+		return cat == character.CatArmor
+	case itemFieldBaneAware, itemFieldBaneRanged:
+		return cat == character.CatHelmet
+	case itemFieldGrip, itemFieldRange, itemFieldDamage, itemFieldDur, itemFieldFeatures:
+		return cat == character.CatWeapon
+	}
+	return false
+}
+
+func (m *Model) startItemEdit(it *character.Item) {
+	m.itemMode = true
+	m.itemTarget = it
+	m.itemActive = itemFieldName
+	m.syncItemFocus()
+}
+
+// syncItemFocus focuses the text input for the active field (none for the enum or
+// bool fields) and seeds it from the item's current value.
+func (m *Model) syncItemFocus() {
+	m.itemName.Blur()
+	m.itemWeight.Blur()
+	m.itemRating.Blur()
+	m.itemRange.Blur()
+	m.itemDamage.Blur()
+	m.itemDur.Blur()
+	m.itemFeatures.Blur()
+	it := m.itemTarget
+	if it == nil {
+		return
+	}
+	focus := func(ti *textinput.Model, v string) {
+		ti.SetValue(v)
+		ti.CursorEnd()
+		ti.Focus()
+	}
+	switch m.itemActive {
+	case itemFieldName:
+		focus(&m.itemName, it.Name)
+	case itemFieldWeight:
+		focus(&m.itemWeight, strconv.Itoa(it.Weight))
+	case itemFieldRating:
+		focus(&m.itemRating, strconv.Itoa(it.ArmorRating))
+	case itemFieldRange:
+		focus(&m.itemRange, strconv.Itoa(it.Range))
+	case itemFieldDamage:
+		focus(&m.itemDamage, it.Damage)
+	case itemFieldDur:
+		focus(&m.itemDur, strconv.Itoa(it.Durability))
+	case itemFieldFeatures:
+		focus(&m.itemFeatures, strings.Join(it.Features, ", "))
+	}
+}
+
+func (m *Model) commitCurrentItemField() {
+	it := m.itemTarget
+	if it == nil {
+		return
+	}
+	switch m.itemActive {
+	case itemFieldName:
+		it.Name = m.itemName.Value()
+	case itemFieldWeight:
+		it.Weight = max(1, atoiOr(m.itemWeight.Value(), 1))
+	case itemFieldRating:
+		it.ArmorRating = max(0, atoiOr(m.itemRating.Value(), 0))
+	case itemFieldRange:
+		it.Range = max(0, atoiOr(m.itemRange.Value(), 0))
+	case itemFieldDamage:
+		it.Damage = m.itemDamage.Value()
+	case itemFieldDur:
+		it.Durability = max(0, atoiOr(m.itemDur.Value(), 0))
+	case itemFieldFeatures:
+		it.Features = splitCSV(m.itemFeatures.Value())
+	}
+}
+
+func (m *Model) closeItemEdit() {
+	m.itemMode = false
+	m.itemTarget = nil
+	m.itemName.Blur()
+	m.itemWeight.Blur()
+	m.itemRating.Blur()
+	m.itemRange.Blur()
+	m.itemDamage.Blur()
+	m.itemDur.Blur()
+	m.itemFeatures.Blur()
+}
+
+// nextItemField advances to the next field visible for the item's category, wrapping.
+func (m *Model) nextItemField(active int) int {
+	cat := character.CatNone
+	if m.itemTarget != nil {
+		cat = m.itemTarget.Category
+	}
+	for i := 1; i <= itemFieldCount; i++ {
+		cand := (active + i) % itemFieldCount
+		if itemFieldVisible(cand, cat) {
+			return cand
+		}
+	}
+	return active
+}
+
+// cycleItemCategory changes the item's category and clears stats that no longer apply.
+func (m *Model) cycleItemCategory(dir int) {
+	it := m.itemTarget
+	if it == nil {
+		return
+	}
+	cur := 0
+	for i, c := range itemCategoryOrder {
+		if c == it.Category {
+			cur = i
+			break
+		}
+	}
+	n := len(itemCategoryOrder)
+	it.Category = itemCategoryOrder[((cur+dir)%n+n)%n]
+	normalizeItemStats(it)
+}
+
+func (m *Model) cycleGrip(dir int) {
+	it := m.itemTarget
+	if it == nil {
+		return
+	}
+	cur := 0
+	for i, g := range character.GripOrder {
+		if g == it.Grip {
+			cur = i
+			break
+		}
+	}
+	n := len(character.GripOrder)
+	it.Grip = character.GripOrder[((cur+dir)%n+n)%n]
+}
+
+// toggleItemBane toggles the bane for the active field, reporting whether the
+// active field was a bane (so other keys can fall through).
+func (m *Model) toggleItemBane() bool {
+	it := m.itemTarget
+	if it == nil {
+		return false
+	}
+	switch m.itemActive {
+	case itemFieldBaneSneak:
+		it.BaneSneaking = !it.BaneSneaking
+	case itemFieldBaneEvade:
+		it.BaneEvade = !it.BaneEvade
+	case itemFieldBaneAcro:
+		it.BaneAcrobatics = !it.BaneAcrobatics
+	case itemFieldBaneAware:
+		it.BaneAwareness = !it.BaneAwareness
+	case itemFieldBaneRanged:
+		it.BaneRanged = !it.BaneRanged
+	default:
+		return false
+	}
+	return true
+}
+
+// normalizeItemStats zeroes stat fields that do not belong to the item's category
+// so stale values from a previous category never persist.
+func normalizeItemStats(it *character.Item) {
+	clearWeapon := func() {
+		it.Grip = ""
+		it.Range = 0
+		it.Damage = ""
+		it.Durability = 0
+		it.Features = nil
+	}
+	clearArmorBanes := func() { it.BaneSneaking, it.BaneEvade, it.BaneAcrobatics = false, false, false }
+	clearHelmetBanes := func() { it.BaneAwareness, it.BaneRanged = false, false }
+	switch it.Category {
+	case character.CatArmor:
+		clearHelmetBanes()
+		clearWeapon()
+	case character.CatHelmet:
+		clearArmorBanes()
+		clearWeapon()
+	case character.CatWeapon:
+		it.ArmorRating = 0
+		clearArmorBanes()
+		clearHelmetBanes()
+		if it.Grip == "" {
+			it.Grip = character.Grip1H
+		}
+	default: // CatNone
+		it.ArmorRating = 0
+		clearArmorBanes()
+		clearHelmetBanes()
+		clearWeapon()
+	}
+}
+
+func (m Model) handleItemKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
+	key := msg.String()
+	if key == keyQuit {
+		return m, tea.Quit
+	}
+	// Enum fields are cycled with the arrows; they are not text inputs.
+	if key == keyLeft || key == keyRight {
+		switch m.itemActive {
+		case itemFieldCategory:
+			m.cycleItemCategory(arrowSign(key))
+			m.autoSave()
+			return m, nil
+		case itemFieldGrip:
+			m.cycleGrip(arrowSign(key))
+			m.autoSave()
+			return m, nil
+		}
+	}
+	if key == keySpace && m.toggleItemBane() {
+		m.autoSave()
+		return m, nil
+	}
+	switch key {
+	case keyEnter, keyEsc:
+		m.commitCurrentItemField()
+		m.closeItemEdit()
+		m.rebuildFields()
+		m.clampFocus()
+		m.autoSave()
+		return m, nil
+	case keyTab:
+		m.commitCurrentItemField()
+		m.itemActive = m.nextItemField(m.itemActive)
+		m.syncItemFocus()
+		return m, textinput.Blink
+	default:
+		var cmd tea.Cmd
+		switch m.itemActive {
+		case itemFieldName:
+			m.itemName, cmd = m.itemName.Update(msg)
+		case itemFieldWeight:
+			m.itemWeight, cmd = m.itemWeight.Update(msg)
+		case itemFieldRating:
+			m.itemRating, cmd = m.itemRating.Update(msg)
+		case itemFieldRange:
+			m.itemRange, cmd = m.itemRange.Update(msg)
+		case itemFieldDamage:
+			m.itemDamage, cmd = m.itemDamage.Update(msg)
+		case itemFieldDur:
+			m.itemDur, cmd = m.itemDur.Update(msg)
+		case itemFieldFeatures:
+			m.itemFeatures, cmd = m.itemFeatures.Update(msg)
+		}
+		return m, cmd
+	}
 }
