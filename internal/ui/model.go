@@ -36,6 +36,33 @@ func preparedColumnOrder(c *character.Character) []preparedEntry {
 	return entries
 }
 
+// heroicEntry is one row in the heroic-abilities list: a focusable field id paired
+// with the name used to sort the list.
+type heroicEntry struct {
+	id   fieldID
+	name string
+}
+
+// heroicOrder returns all heroic abilities — kin-granted and chosen together — as
+// one list sorted alphabetically by name (case-insensitive). The ids still address
+// KinAbilities(Kin) / HeroicAbilities by index, so sorting only affects
+// display/navigation order. Both visualLayout and view.go use this, keeping the
+// grid and the renderer in sync.
+func heroicOrder(c *character.Character) []heroicEntry {
+	kin := character.KinAbilities(c.Kin)
+	entries := make([]heroicEntry, 0, len(kin)+len(c.HeroicAbilities))
+	for i, a := range kin {
+		entries = append(entries, heroicEntry{idKinAbility(i), a.Name})
+	}
+	for i, a := range c.HeroicAbilities {
+		entries = append(entries, heroicEntry{idHab(i), a.Name})
+	}
+	slices.SortStableFunc(entries, func(a, b heroicEntry) int {
+		return strings.Compare(strings.ToLower(a.name), strings.ToLower(b.name))
+	})
+	return entries
+}
+
 type fieldKind int
 
 const (
@@ -347,11 +374,8 @@ func visualLayout(c *character.Character) [][]fieldID {
 	// ability: kin-granted abilities (read-only) first, then chosen ones. Each row is a
 	// single field; enter shows the description (kin: read-only detail, chosen: edit modal).
 	var habRows [][]fieldID
-	for i := range len(character.KinAbilities(c.Kin)) {
-		habRows = append(habRows, []fieldID{idKinAbility(i)})
-	}
-	for i := range len(c.HeroicAbilities) {
-		habRows = append(habRows, []fieldID{idHab(i)})
+	for _, e := range heroicOrder(c) {
+		habRows = append(habRows, []fieldID{e.id})
 	}
 	if len(habRows) == 0 {
 		habRows = append(habRows, []fieldID{idHabEmpty})

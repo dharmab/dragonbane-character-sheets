@@ -20,7 +20,6 @@ const (
 	keyRight = "right"
 	keyEnter = "enter"
 	keyEsc   = "esc"
-	keyTab   = "tab"
 	keySpace = "space"
 	keyQuit  = "ctrl+c"
 	keySave  = "ctrl+s"
@@ -843,9 +842,14 @@ func (m Model) handleAbilityKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		m.char.ClampResources()
 		m.autoSave()
 		return m, nil
-	case keyTab:
+	case keyDown:
 		m.commitCurrentAbilityField()
 		m.abilityActive = (m.abilityActive + 1) % 4
+		m.syncAbilityFocus()
+		return m, textinput.Blink
+	case keyUp:
+		m.commitCurrentAbilityField()
+		m.abilityActive = (m.abilityActive + 3) % 4
 		m.syncAbilityFocus()
 		return m, textinput.Blink
 	default:
@@ -940,7 +944,7 @@ func (m Model) handleWeaknessKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		m.weaknessName.Blur()
 		m.weaknessDesc.Blur()
 		return m, nil
-	case keyTab:
+	case keyUp, keyDown:
 		m.commitCurrentWeaknessField()
 		if m.weaknessActive == 0 {
 			m.weaknessActive = 1
@@ -1313,9 +1317,14 @@ func (m Model) handleSpellKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		m.closeSpellEdit()
 		m.autoSave()
 		return m, nil
-	case keyTab:
+	case keyDown:
 		m.commitCurrentSpellField()
 		m.spellActive = (m.spellActive + 1) % spellFieldCount
+		m.syncSpellFocus()
+		return m, textinput.Blink
+	case keyUp:
+		m.commitCurrentSpellField()
+		m.spellActive = (m.spellActive - 1 + spellFieldCount) % spellFieldCount
 		m.syncSpellFocus()
 		return m, textinput.Blink
 	default:
@@ -1417,9 +1426,14 @@ func (m Model) handleTrickKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		m.closeTrickEdit()
 		m.autoSave()
 		return m, nil
-	case keyTab:
+	case keyDown:
 		m.commitCurrentTrickField()
 		m.trickActive = (m.trickActive + 1) % trickFieldCount
+		m.syncTrickFocus()
+		return m, textinput.Blink
+	case keyUp:
+		m.commitCurrentTrickField()
+		m.trickActive = (m.trickActive - 1 + trickFieldCount) % trickFieldCount
 		m.syncTrickFocus()
 		return m, textinput.Blink
 	default:
@@ -1653,14 +1667,15 @@ func (m *Model) closeItemEdit() {
 	m.itemFeatures.Blur()
 }
 
-// nextItemField advances to the next field visible for the item's category, wrapping.
-func (m *Model) nextItemField(active int) int {
+// stepItemField moves dir (±1) to the next field visible for the item's category,
+// wrapping around.
+func (m *Model) stepItemField(active, dir int) int {
 	cat := character.CatNone
 	if m.itemTarget != nil {
 		cat = m.itemTarget.Category
 	}
 	for i := 1; i <= itemFieldCount; i++ {
-		cand := (active + i) % itemFieldCount
+		cand := ((active+dir*i)%itemFieldCount + itemFieldCount) % itemFieldCount
 		if itemFieldVisible(cand, cat) {
 			return cand
 		}
@@ -1790,9 +1805,14 @@ func (m Model) handleItemKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		m.clampFocus()
 		m.autoSave()
 		return m, nil
-	case keyTab:
+	case keyDown:
 		m.commitCurrentItemField()
-		m.itemActive = m.nextItemField(m.itemActive)
+		m.itemActive = m.stepItemField(m.itemActive, +1)
+		m.syncItemFocus()
+		return m, textinput.Blink
+	case keyUp:
+		m.commitCurrentItemField()
+		m.itemActive = m.stepItemField(m.itemActive, -1)
 		m.syncItemFocus()
 		return m, textinput.Blink
 	default:

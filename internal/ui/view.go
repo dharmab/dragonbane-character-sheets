@@ -242,7 +242,7 @@ func (m Model) viewWeaknessEdit() string {
 		b.WriteString(" Desc: " + sEdit.Render(m.weaknessDesc.View()) + "\n")
 	}
 	b.WriteString(sep + "\n")
-	b.WriteString(sDim.Render("  tab next   enter/esc done") + "\n")
+	b.WriteString(sDim.Render("  ↑↓ next   enter/esc done") + "\n")
 	return b.String()
 }
 
@@ -315,7 +315,7 @@ func (m Model) viewItemEdit() string {
 	}
 
 	b.WriteString(sep + "\n")
-	b.WriteString(sDim.Render("  tab next   ←/→ change enum   space toggle   enter/esc done") + "\n")
+	b.WriteString(sDim.Render("  ↑↓ next   ←/→ change enum   space toggle   enter/esc done") + "\n")
 	return b.String()
 }
 
@@ -485,6 +485,7 @@ func (m Model) viewGear() string {
 	arCol := lipgloss.NewStyle().Width(2).Align(lipgloss.Right)
 	gripCol := lipgloss.NewStyle().Width(4)
 	dmgCol := lipgloss.NewStyle().Width(8)
+	rngCol := lipgloss.NewStyle().Width(4).Align(lipgloss.Right)
 	numCol := lipgloss.NewStyle().Width(3).Align(lipgloss.Right)
 
 	nameCell := func(id fieldID, name string) string {
@@ -525,7 +526,7 @@ func (m Model) viewGear() string {
 	}
 
 	lines = append(lines, "", sHdr.Render(" WEAPONS"),
-		sDim.Render(fmt.Sprintf(" %-16s %-4s %-8s %3s %3s  %s", "Name", "Grip", "Dmg", "Rng", "Dur", "Features")))
+		sDim.Render(fmt.Sprintf(" %-16s %-4s %-8s %4s %3s  %s", "Name", "Grip", "Dmg", "Rng", "Dur", "Features")))
 	for i := range 3 {
 		var w character.Item
 		if i < len(m.char.WeaponsAtHand) {
@@ -539,7 +540,7 @@ func (m Model) viewGear() string {
 		dmg := dash(w.Damage)
 		lines = append(lines, " "+nameCell(idWeaponAtHand(i), w.Name)+" "+
 			gripCol.Render(grip)+" "+dmgCol.Render(dmg)+" "+
-			numCol.Render(m.fnum(idWeaponRange(i), w.Range))+" "+
+			rngCol.Render(m.fnum(idWeaponRange(i), w.Range)+"m")+" "+
 			numCol.Render(m.fnum(idWeaponDur(i), w.Durability))+"  "+
 			strings.Join(w.Features, ", "))
 	}
@@ -657,15 +658,21 @@ func (m Model) viewHeroicAbilities() string {
 		lines = append(lines, " "+nameCell+" "+costCol.Render(costStr)+"  "+reqCell)
 	}
 
-	for i, a := range character.KinAbilities(m.char.Kin) {
-		row(idKinAbility(i), a.Name, a.WPCost, nil, true)
-	}
-	for i, a := range m.char.HeroicAbilities {
-		name := a.Name
-		if name == "" {
-			name = unnamed
+	kin := character.KinAbilities(m.char.Kin)
+	for _, e := range heroicOrder(m.char) {
+		switch e.id.family {
+		case famKinAbility:
+			a := kin[e.id.index]
+			row(e.id, a.Name, a.WPCost, nil, true)
+		case famHab:
+			a := m.char.HeroicAbilities[e.id.index]
+			name := a.Name
+			if name == "" {
+				name = unnamed
+			}
+			row(e.id, name, a.WPCost, a.Requirements, character.RequirementMet(m.char, a))
+		default: // heroicOrder only yields kin/chosen ability ids
 		}
-		row(idHab(i), name, a.WPCost, a.Requirements, character.RequirementMet(m.char, a))
 	}
 	if len(character.KinAbilities(m.char.Kin)) == 0 && len(m.char.HeroicAbilities) == 0 {
 		lines = append(lines, " "+m.ftext(idHabEmpty, "(none — press 'a' to add)"))
@@ -750,7 +757,7 @@ func (m Model) viewAbilityEdit() string {
 	b.WriteString(reqLine + "   " + sDim.Render("(enter to choose)") + "\n")
 
 	b.WriteString(sep + "\n")
-	b.WriteString(sDim.Render("  tab next   enter edit reqs / done   esc done") + "\n")
+	b.WriteString(sDim.Render("  ↑↓ next   enter edit reqs / done   esc done") + "\n")
 	return b.String()
 }
 
@@ -972,7 +979,7 @@ func (m Model) viewSpellEdit() string {
 	b.WriteString(textField(spellFieldDesc, "Desc", sp.Description, m.spellDesc.View()))
 
 	b.WriteString(sep + "\n")
-	b.WriteString(sDim.Render("  tab next   ←/→ change enum   enter edit prereqs / done   esc done") + "\n")
+	b.WriteString(sDim.Render("  ↑↓ next   ←/→ change enum   enter edit prereqs / done   esc done") + "\n")
 	return b.String()
 }
 
@@ -1010,7 +1017,7 @@ func (m Model) viewTrickEdit() string {
 	}
 
 	b.WriteString(sep + "\n")
-	b.WriteString(sDim.Render("  tab next   ←/→ change school   enter/esc done") + "\n")
+	b.WriteString(sDim.Render("  ↑↓ next   ←/→ change school   enter/esc done") + "\n")
 	return b.String()
 }
 

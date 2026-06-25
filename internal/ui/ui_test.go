@@ -241,8 +241,8 @@ func TestItemModalSetsCategory(t *testing.T) {
 	if !m.itemMode {
 		t.Fatal("expected item modal open")
 	}
-	m = send(m, "tab") // Name -> Weight
-	m = send(m, "tab") // Weight -> Category
+	m = send(m, "down") // Name -> Weight
+	m = send(m, "down") // Weight -> Category
 	if m.itemActive != itemFieldCategory {
 		t.Fatalf("active field = %d; want category", m.itemActive)
 	}
@@ -289,7 +289,7 @@ func TestGearAndItemModalRender(t *testing.T) {
 	m.rebuildFields()
 
 	out := m.render()
-	for _, want := range []string{"ARMOR", "HELMET", "WEAPONS", "Plate", "Halberd", "2d8"} {
+	for _, want := range []string{"ARMOR", "HELMET", "WEAPONS", "Plate", "Halberd", "2d8", "4m"} {
 		if !strings.Contains(out, want) {
 			t.Errorf("gear render missing %q", want)
 		}
