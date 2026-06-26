@@ -373,19 +373,7 @@ func visualLayout(c *model.Character) [][]fieldID {
 		rows = append(rows, row)
 	}
 
-	// Heroic abilities section (after skills, before gear). One focusable row per
-	// ability: kin-granted abilities (read-only) first, then chosen ones. Each row is a
-	// single field; enter shows the description (kin: read-only detail, chosen: edit modal).
-	var habRows [][]fieldID
-	for _, e := range heroicOrder(c) {
-		habRows = append(habRows, []fieldID{e.id})
-	}
-	if len(habRows) == 0 {
-		habRows = append(habRows, []fieldID{idHabEmpty})
-	}
-	rows = append(rows, habRows...)
-
-	// Magic section (after heroic abilities). Two columns rendered side by side, like
+	// Magic section (after skills). Two columns rendered side by side, like
 	// inventory/tiny items: known magic skills on the left (level + advancement), the
 	// prepared spells on the right.
 	var magicSkillRows [][]fieldID
@@ -406,6 +394,18 @@ func visualLayout(c *model.Character) [][]fieldID {
 		preparedRows = append(preparedRows, []fieldID{idPreparedEmpty})
 	}
 	rows = append(rows, zipColumns(magicSkillRows, preparedRows)...)
+
+	// Heroic abilities section (after magic, before gear). One focusable row per
+	// ability: kin-granted abilities (read-only) first, then chosen ones. Each row is a
+	// single field; enter shows the description (kin: read-only detail, chosen: edit modal).
+	var habRows [][]fieldID
+	for _, e := range heroicOrder(c) {
+		habRows = append(habRows, []fieldID{e.id})
+	}
+	if len(habRows) == 0 {
+		habRows = append(habRows, []fieldID{idHabEmpty})
+	}
+	rows = append(rows, habRows...)
 
 	// Gear section. Each slot's name is always focusable; its stat fields appear
 	// only when the slot holds an item (Name != ""). See view.go viewGear.

@@ -103,8 +103,8 @@ func (m Model) render() string {
 		{m.viewIdentity() + sep, []int{secIdentity, secWeakness}},
 		{m.viewAttrResources(w) + sep, []int{secAttributes, secResources, secConditions}},
 		{m.viewSkills(w) + sep, []int{secSkills}},
-		{m.viewHeroicAbilities() + sep, []int{secHeroic}},
 		{m.viewMagic(w) + sep, []int{secMagic}},
+		{m.viewHeroicAbilities() + sep, []int{secHeroic}},
 		{m.viewGear() + sep, []int{secGear}},
 		{m.viewInventoryAndTiny(w), []int{secInventory, secTinyItems}},
 	}
@@ -485,7 +485,7 @@ func (m Model) viewGear() string {
 	arCol := lipgloss.NewStyle().Width(2).Align(lipgloss.Right)
 	gripCol := lipgloss.NewStyle().Width(3)
 	dmgCol := lipgloss.NewStyle().Width(4)
-	rngCol := lipgloss.NewStyle().Width(4).Align(lipgloss.Right)
+	rngCol := lipgloss.NewStyle().Width(3).Align(lipgloss.Right)
 	numCol := lipgloss.NewStyle().Width(3).Align(lipgloss.Right)
 
 	nameCell := func(id fieldID, name string) string {
@@ -639,7 +639,7 @@ func (m Model) viewTinyItems() string {
 }
 
 func (m Model) viewHeroicAbilities() string {
-	const nameW, costW = 24, 2
+	const nameW, costW = 16, 2
 	nameCol := lipgloss.NewStyle().Width(nameW)
 	costCol := lipgloss.NewStyle().Width(costW).Align(lipgloss.Right)
 
