@@ -5,7 +5,7 @@ import (
 	"os"
 
 	tea "charm.land/bubbletea/v2"
-	"github.com/dharmab/dragonbane-charsheet/internal/character"
+	"github.com/dharmab/dragonbane-charsheet/internal/model"
 	"github.com/dharmab/dragonbane-charsheet/internal/ui"
 	"github.com/spf13/cobra"
 )
@@ -25,7 +25,7 @@ func main() {
 		RunE: func(_ *cobra.Command, args []string) error {
 			path := args[0]
 
-			char, err := character.Load(path)
+			char, err := model.Load(path)
 			if err != nil {
 				return fmt.Errorf("loading %s: %w", path, err)
 			}

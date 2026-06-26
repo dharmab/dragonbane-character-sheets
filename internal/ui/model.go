@@ -6,7 +6,7 @@ import (
 
 	"charm.land/bubbles/v2/textinput"
 	tea "charm.land/bubbletea/v2"
-	"github.com/dharmab/dragonbane-charsheet/internal/character"
+	"github.com/dharmab/dragonbane-charsheet/internal/model"
 )
 
 // preparedEntry is one row in the prepared-magic column: a focusable field id paired
@@ -21,7 +21,7 @@ type preparedEntry struct {
 // MagicTricks respectively, so sorting only affects display/navigation order. Both the
 // navigation grid (visualLayout) and the renderer (view.go) use this, keeping them in
 // sync.
-func preparedColumnOrder(c *character.Character) []preparedEntry {
+func preparedColumnOrder(c *model.Character) []preparedEntry {
 	prepared := c.PreparedSpells()
 	entries := make([]preparedEntry, 0, len(prepared)+len(c.MagicTricks))
 	for i, sp := range prepared {
@@ -48,8 +48,8 @@ type heroicEntry struct {
 // KinAbilities(Kin) / HeroicAbilities by index, so sorting only affects
 // display/navigation order. Both visualLayout and view.go use this, keeping the
 // grid and the renderer in sync.
-func heroicOrder(c *character.Character) []heroicEntry {
-	kin := character.KinAbilities(c.Kin)
+func heroicOrder(c *model.Character) []heroicEntry {
+	kin := model.KinAbilities(c.Kin)
 	entries := make([]heroicEntry, 0, len(kin)+len(c.HeroicAbilities))
 	for i, a := range kin {
 		entries = append(entries, heroicEntry{idKinAbility(i), a.Name})
@@ -85,32 +85,32 @@ const (
 	famAge
 	famKin
 	famProfession
-	famAttr // index → character.AttributeOrder
+	famAttr // index → model.AttributeOrder
 	famCurrentHP
 	famCurrentWP
 	famWeaknessName
 	famRestRound
 	famRestStretch
 	famCondition  // index → conditionOrder
-	famSkillLevel // index → Character.Skills
-	famSkillAdv   // index → Character.Skills
+	famSkillLevel // index → model.Skills
+	famSkillAdv   // index → model.Skills
 	famArmor
 	famHelmet
-	famWeaponAtHand // index → Character.WeaponsAtHand
-	famWeaponDur    // index → Character.WeaponsAtHand
-	famInvName      // index → Character.Inventory
-	famInvWeight    // index → Character.Inventory
+	famWeaponAtHand // index → model.WeaponsAtHand
+	famWeaponDur    // index → model.WeaponsAtHand
+	famInvName      // index → model.Inventory
+	famInvWeight    // index → model.Inventory
 	famInvEmpty
-	famTiny // index → Character.TinyItems
+	famTiny // index → model.TinyItems
 	famTinyEmpty
-	famKinAbility // index → KinAbilities(Character.Kin)
-	famHab        // index → Character.HeroicAbilities
+	famKinAbility // index → KinAbilities(model.Kin)
+	famHab        // index → model.HeroicAbilities
 	famHabEmpty
-	famMagicSkillLevel // index → Character.MagicSkills
-	famMagicSkillAdv   // index → Character.MagicSkills
+	famMagicSkillLevel // index → model.MagicSkills
+	famMagicSkillAdv   // index → model.MagicSkills
 	famMagicEmpty
-	famPreparedSpell // index → Character.PreparedSpells()
-	famPreparedTrick // index → Character.MagicTricks (always castable; no slot)
+	famPreparedSpell // index → model.PreparedSpells()
+	famPreparedTrick // index → model.MagicTricks (always castable; no slot)
 	famPreparedEmpty
 )
 
@@ -204,7 +204,7 @@ const (
 //
 //nolint:recvcheck // see above
 type Model struct {
-	char *character.Character
+	char *model.Character
 	path string
 
 	// Asynchronous autosave bookkeeping. autoSave marshals a snapshot and marks
@@ -242,7 +242,7 @@ type Model struct {
 	// and grip are enums cycled with ←/→; everything else is a text input.
 	itemMode     bool
 	itemActive   int // one of the itemField* constants
-	itemTarget   *character.Item
+	itemTarget   *model.Item
 	itemName     textinput.Model
 	itemWeight   textinput.Model
 	itemRating   textinput.Model
@@ -265,8 +265,8 @@ type Model struct {
 	reqIndex  int             // ability index whose requirements are being edited
 	reqChosen map[string]bool // skill name -> selected
 
-	detailMode    bool                    // read-only ability description popup
-	detailAbility character.HeroicAbility // ability shown in the detail popup
+	detailMode    bool                // read-only ability description popup
+	detailAbility model.HeroicAbility // ability shown in the detail popup
 
 	// Magic. The magic-skill add picker and the grimoire add picker both reuse
 	// `picking`; the flags below mark which one is active.
@@ -296,11 +296,11 @@ type Model struct {
 	prereqIndex  int             // grimoire index whose prerequisites are being edited
 	prereqChosen map[string]bool // spell name -> selected
 
-	spellDetailMode bool            // read-only spell description popup
-	detailSpell     character.Spell // spell shown in the detail popup
+	spellDetailMode bool        // read-only spell description popup
+	detailSpell     model.Spell // spell shown in the detail popup
 
-	trickDetailMode bool                 // read-only trick description popup
-	detailTrick     character.MagicTrick // trick shown in the detail popup
+	trickDetailMode bool             // read-only trick description popup
+	detailTrick     model.MagicTrick // trick shown in the detail popup
 }
 
 // namePick is one row in the grimoire add picker: name is the underlying predefined
@@ -318,7 +318,7 @@ type namePick struct {
 // visualLayout is the single source of truth for where every focusable field
 // appears on screen. Row/column positions here must match what view.go renders.
 // Both the navigation grid and the renderer are derived from this.
-func visualLayout(c *character.Character) [][]fieldID {
+func visualLayout(c *model.Character) [][]fieldID {
 	gap := fieldID{} // famNone: gap placeholder, never focusable
 	// Capacity is a safe over-estimate: identity/attribute/gear rows plus one row
 	// per skill, ability, inventory, and tiny item.
@@ -335,7 +335,7 @@ func visualLayout(c *character.Character) [][]fieldID {
 	)
 	var generalIdx, weaponIdx []int
 	for i, sk := range c.Skills {
-		if sk.Weapon {
+		if sk.IsWeaponSkill {
 			weaponIdx = append(weaponIdx, i)
 		} else {
 			generalIdx = append(generalIdx, i)
@@ -411,7 +411,7 @@ func visualLayout(c *character.Character) [][]fieldID {
 	rows = append(rows, []fieldID{idArmor}, []fieldID{idHelmet})
 	for i := range 3 {
 		weaponRow := []fieldID{idWeaponAtHand(i)}
-		if i < len(c.WeaponsAtHand) && c.WeaponsAtHand[i].Name != "" {
+		if i < len(c.Weapons) && c.Weapons[i].Name != "" {
 			weaponRow = append(weaponRow, idWeaponDur(i))
 		}
 		rows = append(rows, weaponRow)
@@ -518,7 +518,7 @@ func metaFor(id fieldID) field {
 	}
 }
 
-func buildFields(c *character.Character) []field {
+func buildFields(c *model.Character) []field {
 	layout := visualLayout(c)
 	seen := map[fieldID]struct{}{}
 	var fields []field
@@ -537,7 +537,7 @@ func buildFields(c *character.Character) []field {
 	return fields
 }
 
-func buildGrid(c *character.Character, fields []field) [][]int {
+func buildGrid(c *model.Character, fields []field) [][]int {
 	idx := make(map[fieldID]int, len(fields))
 	for i, f := range fields {
 		idx[f.id] = i
@@ -557,7 +557,7 @@ func buildGrid(c *character.Character, fields []field) [][]int {
 	return grid
 }
 
-func New(c *character.Character, path string) Model {
+func New(c *model.Character, path string) Model {
 	ti := textinput.New()
 	ti.CharLimit = 256
 
@@ -744,8 +744,8 @@ func (m Model) focusableAbove(col, row int) int {
 // truth shared by the picker (enumOptions) and the commit (applyPickerSelection).
 type enumField struct {
 	options []string
-	get     func(*character.Character) string
-	set     func(*character.Character, string)
+	get     func(*model.Character) string
+	set     func(*model.Character, string)
 }
 
 func toStrings[T ~string](xs []T) []string {
@@ -760,21 +760,21 @@ func enumFieldFor(fam fieldFamily) (enumField, bool) {
 	switch fam {
 	case famKin:
 		return enumField{
-			options: toStrings(character.AllKins),
-			get:     func(c *character.Character) string { return string(c.Kin) },
-			set:     func(c *character.Character, v string) { c.Kin = character.Kin(v) },
+			options: toStrings(model.AllKins),
+			get:     func(c *model.Character) string { return string(c.Kin) },
+			set:     func(c *model.Character, v string) { c.Kin = model.Kin(v) },
 		}, true
 	case famProfession:
 		return enumField{
-			options: toStrings(character.AllProfessions),
-			get:     func(c *character.Character) string { return string(c.Profession) },
-			set:     func(c *character.Character, v string) { c.Profession = character.Profession(v) },
+			options: toStrings(model.AllProfessions),
+			get:     func(c *model.Character) string { return string(c.Profession) },
+			set:     func(c *model.Character, v string) { c.Profession = model.Profession(v) },
 		}, true
 	case famAge:
 		return enumField{
-			options: toStrings(character.AllAges),
-			get:     func(c *character.Character) string { return string(c.Age) },
-			set:     func(c *character.Character, v string) { c.Age = character.Age(v) },
+			options: toStrings(model.AllAges),
+			get:     func(c *model.Character) string { return string(c.Age) },
+			set:     func(c *model.Character, v string) { c.Age = model.Age(v) },
 		}, true
 	default:
 		return enumField{}, false

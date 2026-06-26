@@ -7,7 +7,7 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
-	"github.com/dharmab/dragonbane-charsheet/internal/character"
+	"github.com/dharmab/dragonbane-charsheet/internal/model"
 )
 
 const fallbackWidth = 80
@@ -224,8 +224,8 @@ func (m Model) viewIdentity() string {
 		m.fenum(idKin, string(m.char.Kin)),
 		m.fenum(idProfession, string(m.char.Profession)),
 		m.ftext(idWeaknessName, weaknessName),
-		m.fbool(idRestRound, "Used Round Rest", m.char.RoundRestUsed),
-		m.fbool(idRestStretch, "Used Stretch Rest", m.char.StretchRestUsed),
+		m.fbool(idRestRound, "Used Round Rest", m.char.UsedRoundRest),
+		m.fbool(idRestStretch, "Used Stretch Rest", m.char.UsedShiftRest),
 	)
 }
 
@@ -296,22 +296,22 @@ func (m Model) viewItemEdit() string {
 	enumField(itemFieldCategory, "Category", cat)
 
 	switch it.Category {
-	case character.CatArmor:
+	case model.ItemCategoryArmor:
 		textField(itemFieldRating, "Armor Rating", strconv.Itoa(it.ArmorRating), m.itemRating.View())
-		boolField(itemFieldBaneSneak, "Bane on Sneaking", it.BaneSneaking)
-		boolField(itemFieldBaneEvade, "Bane on Evade", it.BaneEvade)
-		boolField(itemFieldBaneAcro, "Bane on Acrobatics", it.BaneAcrobatics)
-	case character.CatHelmet:
+		boolField(itemFieldBaneSneak, "Bane on Sneaking", it.BaneToSneaking)
+		boolField(itemFieldBaneEvade, "Bane on Evade", it.BaneToEvade)
+		boolField(itemFieldBaneAcro, "Bane on Acrobatics", it.BaneToAcrobatics)
+	case model.ItemCategoryHelmet:
 		textField(itemFieldRating, "Armor Rating", strconv.Itoa(it.ArmorRating), m.itemRating.View())
-		boolField(itemFieldBaneAware, "Bane on Awareness", it.BaneAwareness)
-		boolField(itemFieldBaneRanged, "Bane on Ranged Attacks", it.BaneRanged)
-	case character.CatWeapon:
+		boolField(itemFieldBaneAware, "Bane on Awareness", it.BaneToAwareness)
+		boolField(itemFieldBaneRanged, "Bane on Ranged Attacks", it.BaneToRanged)
+	case model.ItemCategoryWeapon:
 		enumField(itemFieldGrip, "Grip", dash(string(it.Grip)))
 		textField(itemFieldRange, "Range", strconv.Itoa(it.Range), m.itemRange.View())
 		textField(itemFieldDamage, "Damage", it.Damage, m.itemDamage.View())
 		textField(itemFieldDur, "Durability", strconv.Itoa(it.Durability), m.itemDur.View())
 		textField(itemFieldFeatures, "Features", strings.Join(it.Features, ", "), m.itemFeatures.View())
-	case character.CatNone: // uncategorized: no extra fields
+	case model.ItemCategoryGeneric: // uncategorized: no extra fields
 	}
 
 	b.WriteString(sep + "\n")
@@ -338,8 +338,8 @@ func (m Model) viewAttrResources(w int) string {
 		m.attrRow(2, 5), // AGL | CHA
 	}
 
-	agl := m.char.Attributes[character.AGL]
-	str := m.char.Attributes[character.STR]
+	agl := m.char.Attributes[model.AttributeAgility]
+	str := m.char.Attributes[model.AttributeStrength]
 	maxHP := m.char.MaxHP()
 	maxWP := m.char.MaxWP()
 
@@ -348,10 +348,10 @@ func (m Model) viewAttrResources(w int) string {
 		fmt.Sprintf(" HP %s / %d   WP %s / %d",
 			m.fnum(idCurrentHP, m.char.CurrentHP), maxHP,
 			m.fnum(idCurrentWP, m.char.CurrentWP), maxWP),
-		fmt.Sprintf(" Movement: %dm", character.Movement(m.char.Kin, agl)),
+		fmt.Sprintf(" Movement: %dm", model.Movement(m.char.Kin, agl)),
 		fmt.Sprintf(" STR Bonus: %s   AGL Bonus: %s",
-			character.DamageBonus(str),
-			character.DamageBonus(agl)),
+			model.DamageBonus(str),
+			model.DamageBonus(agl)),
 	}
 
 	// Conditions render two per row, in conditionOrder (the same order toggleBool
@@ -388,9 +388,9 @@ func (m Model) viewAttrResources(w int) string {
 	return strings.Join(lines, "\n") + "\n"
 }
 
-// attrRow renders two attributes side by side; i1 and i2 index character.AttributeOrder.
+// attrRow renders two attributes side by side; i1 and i2 index model.AttributeOrder.
 func (m Model) attrRow(i1, i2 int) string {
-	a1, a2 := character.AttributeOrder[i1], character.AttributeOrder[i2]
+	a1, a2 := model.AllAttributes[i1], model.AllAttributes[i2]
 	// Width-2 cell (attributes are 3–18), right-aligned so the second column
 	// stays put whether the first value is one or two digits.
 	cell := lipgloss.NewStyle().Width(2).Align(lipgloss.Right)
@@ -439,7 +439,7 @@ func (m Model) viewSkills(w int) string {
 
 	var general, weapon []int
 	for i, sk := range m.char.Skills {
-		if sk.Weapon {
+		if sk.IsWeaponSkill {
 			weapon = append(weapon, i)
 		} else {
 			general = append(general, i)
@@ -513,9 +513,9 @@ func (m Model) viewGear() string {
 		lines = append(lines, " "+nameCell(idArmor, ""))
 	} else {
 		banes := strings.Join([]string{
-			bane("Sneaking", a.BaneSneaking),
-			bane("Evade", a.BaneEvade),
-			bane("Acrobatics", a.BaneAcrobatics),
+			bane("Sneaking", a.BaneToSneaking),
+			bane("Evade", a.BaneToEvade),
+			bane("Acrobatics", a.BaneToAcrobatics),
 		}, "  ")
 		lines = append(lines, abHdr,
 			" "+nameCell(idArmor, a.Name)+" "+arCol.Render(strconv.Itoa(a.ArmorRating))+"  "+banes)
@@ -526,8 +526,8 @@ func (m Model) viewGear() string {
 		lines = append(lines, " "+nameCell(idHelmet, ""))
 	} else {
 		banes := strings.Join([]string{
-			bane("Awareness", h.BaneAwareness),
-			bane("Ranged Attacks", h.BaneRanged),
+			bane("Awareness", h.BaneToAwareness),
+			bane("Ranged Attacks", h.BaneToRanged),
 		}, "  ")
 		lines = append(lines, abHdr,
 			" "+nameCell(idHelmet, h.Name)+" "+arCol.Render(strconv.Itoa(h.ArmorRating))+"  "+banes)
@@ -536,9 +536,9 @@ func (m Model) viewGear() string {
 	lines = append(lines, "", sHdr.Render(" WEAPONS"),
 		sDim.Render(fmt.Sprintf(" %-16s %-3s %-4s %4s %3s  %s", "Name", "Grp", "Dmg", "Rng", "Dur", "Features")))
 	for i := range 3 {
-		var w character.Item
-		if i < len(m.char.WeaponsAtHand) {
-			w = m.char.WeaponsAtHand[i]
+		var w model.Item
+		if i < len(m.char.Weapons) {
+			w = m.char.Weapons[i]
 		}
 		if w.Name == "" {
 			lines = append(lines, " "+nameCell(idWeaponAtHand(i), ""))
@@ -586,9 +586,9 @@ func (m Model) viewInventoryAndTiny(w int) string {
 }
 
 func (m Model) viewInventory() string {
-	str := m.char.Attributes[character.STR]
-	maxSlots := character.InventorySlots(str)
-	used := character.UsedSlots(m.char.Inventory)
+	str := m.char.Attributes[model.AttributeStrength]
+	maxSlots := model.InventorySlots(str)
+	used := model.UsedInventorySlots(m.char.Inventory)
 
 	slotInfo := fmt.Sprintf("%d/%d slots", used, maxSlots)
 	if used > maxSlots {
@@ -661,7 +661,7 @@ func (m Model) viewHeroicAbilities() string {
 		lines = append(lines, " "+nameCell+" "+costCol.Render(costStr))
 	}
 
-	kin := character.KinAbilities(m.char.Kin)
+	kin := model.KinAbilities(m.char.Kin)
 	for _, e := range heroicOrder(m.char) {
 		switch e.id.family {
 		case famKinAbility:
@@ -677,7 +677,7 @@ func (m Model) viewHeroicAbilities() string {
 		default: // heroicOrder only yields kin/chosen ability ids
 		}
 	}
-	if len(character.KinAbilities(m.char.Kin)) == 0 && len(m.char.HeroicAbilities) == 0 {
+	if len(model.KinAbilities(m.char.Kin)) == 0 && len(m.char.HeroicAbilities) == 0 {
 		lines = append(lines, " "+m.ftext(idHabEmpty, "(none — press 'a' to add)"))
 	}
 
@@ -697,7 +697,7 @@ func (m Model) viewAbilityDetail() string {
 		cost = strconv.Itoa(a.WPCost)
 	}
 	b.WriteString(" WP Cost: " + cost + "\n")
-	if label := character.RequirementLabel(a.Requirements); label != "" {
+	if label := model.RequirementLabel(a.Requirements); label != "" {
 		b.WriteString(" Requires: " + label + "\n")
 	}
 	b.WriteString("\n")
@@ -750,7 +750,7 @@ func (m Model) viewAbilityEdit() string {
 	b.WriteString(textField(2, "Desc", a.Description, m.abilityDesc.View()))
 
 	req := noneLabel
-	if label := character.RequirementLabel(a.Requirements); label != "" {
+	if label := model.RequirementLabel(a.Requirements); label != "" {
 		req = label
 	}
 	reqLine := " Requires: " + req
@@ -815,7 +815,7 @@ func (m Model) viewMagic(w int) string {
 	leftLines = append(leftLines, sDim.Render(" a add skill   x remove"))
 
 	prepared := m.char.PreparedSpells()
-	limit := character.PreparedSpellLimit(m.char.Attributes[character.INT])
+	limit := model.PreparedSpellLimit(m.char.Attributes[model.AttributeStrength])
 	count := fmt.Sprintf("%d/%d", len(prepared), limit)
 	if len(prepared) > limit {
 		count = sWarn.Render(count + " (OVER)")
@@ -886,20 +886,20 @@ func (m Model) viewGrimoire() string {
 	var b strings.Builder
 	sep := sDim.Render(strings.Repeat("─", 70))
 
-	limit := character.PreparedSpellLimit(m.char.Attributes[character.INT])
-	count := fmt.Sprintf("%d/%d prepared", m.char.PreparedCount(), limit)
-	if m.char.PreparedCount() > limit {
+	limit := model.PreparedSpellLimit(m.char.Attributes[model.AttributeIntelligence])
+	count := fmt.Sprintf("%d/%d prepared", m.char.PreparedSpellCount(), limit)
+	if m.char.PreparedSpellCount() > limit {
 		count = sWarn.Render(count + " (OVER)")
 	}
 	b.WriteString(sHdr.Render(" GRIMOIRE") + "  " + count + "\n")
 	b.WriteString(sep + "\n")
 
 	b.WriteString(sHdr.Render(" SPELLS") + "\n")
-	nSpells := len(m.char.Grimoire)
+	nSpells := len(m.char.Spells)
 	if nSpells == 0 {
 		b.WriteString(sDim.Render(" (no spells — press 'a' to record one)") + "\n")
 	} else {
-		for i, sp := range m.char.Grimoire {
+		for i, sp := range m.char.Spells {
 			box := checkEmpty
 			if sp.Prepared {
 				box = checkFull
@@ -939,7 +939,7 @@ func (m Model) viewGrimoire() string {
 }
 
 func (m Model) viewSpellEdit() string {
-	sp := m.char.Grimoire[m.spellIndex]
+	sp := m.char.Spells[m.spellIndex]
 	var b strings.Builder
 	sep := sDim.Render(strings.Repeat("─", 66))
 	b.WriteString(sHdr.Render(" SPELL") + "\n")
@@ -1064,7 +1064,7 @@ func (m Model) viewSpellDetail() string {
 	}
 	b.WriteString(sHdr.Render(" "+strings.ToUpper(name)) + "\n")
 	b.WriteString(sep + "\n")
-	schoolRank := fmt.Sprintf(" School: %s   Rank: %d   WP Cost: %s\n", sp.School, sp.Rank, character.SpellWPCost(sp))
+	schoolRank := fmt.Sprintf(" School: %s   Rank: %d   WP Cost: %s\n", sp.School, sp.Rank, sp.WPCost())
 	b.WriteString(schoolRank)
 	rng := sp.Range
 	if rng == "" {

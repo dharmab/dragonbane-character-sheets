@@ -8,7 +8,7 @@ import (
 
 	"charm.land/bubbles/v2/textinput"
 	tea "charm.land/bubbletea/v2"
-	"github.com/dharmab/dragonbane-charsheet/internal/character"
+	"github.com/dharmab/dragonbane-charsheet/internal/model"
 )
 
 // Key names as reported by bubbletea's KeyPressMsg.String(), used in the key
@@ -209,7 +209,7 @@ func (m Model) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		inBounds := idx >= 0 && idx < len(m.char.Inventory)
 		switch key {
 		case keyAdd:
-			m.char.Inventory = append(m.char.Inventory, character.Item{Name: "", Weight: 1})
+			m.char.Inventory = append(m.char.Inventory, model.Item{Name: "", Weight: 1})
 			m.rebuildFields()
 			m.autoSave()
 			return m, nil
@@ -220,8 +220,8 @@ func (m Model) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 			}
 		case keyIncr, keyIncrAlt, keyDecr:
 			if f.id.family == famInvName && inBounds {
-				base, qty := character.ParseQty(m.char.Inventory[idx].Name)
-				m.char.Inventory[idx].Name = character.ApplyQty(base, max(1, qty+signOf(key)))
+				base, qty := model.ParseQuantity(m.char.Inventory[idx].Name)
+				m.char.Inventory[idx].Name = model.ApplyQuantity(base, max(1, qty+signOf(key)))
 				m.autoSave()
 				return m, nil
 			}
@@ -265,8 +265,8 @@ func (m Model) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 			return m, nil
 		case keyIncr, keyIncrAlt, keyDecr:
 			if inBounds {
-				base, qty := character.ParseQty(m.char.TinyItems[idx])
-				m.char.TinyItems[idx] = character.ApplyQty(base, max(1, qty+signOf(key)))
+				base, qty := model.ParseQuantity(m.char.TinyItems[idx])
+				m.char.TinyItems[idx] = model.ApplyQuantity(base, max(1, qty+signOf(key)))
 				m.autoSave()
 				return m, nil
 			}
@@ -288,7 +288,7 @@ func (m Model) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 			case keyAdd:
 				m.openAbilityPicker()
 			case keyEnter:
-				kin := character.KinAbilities(m.char.Kin)
+				kin := model.KinAbilities(m.char.Kin)
 				if i := f.id.index; i >= 0 && i < len(kin) {
 					m.detailAbility = kin[i]
 					m.detailMode = true
@@ -324,8 +324,8 @@ func (m Model) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 			// Only HP/WP-bonus abilities can be stacked via the "x N" name suffix.
 			a := m.char.HeroicAbilities[idx]
 			if a.HPBonus != 0 || a.WPBonus != 0 {
-				base, qty := character.ParseQty(a.Name)
-				m.char.HeroicAbilities[idx].Name = character.ApplyQty(base, max(1, qty+signOf(key)))
+				base, qty := model.ParseQuantity(a.Name)
+				m.char.HeroicAbilities[idx].Name = model.ApplyQuantity(base, max(1, qty+signOf(key)))
 				m.char.ClampResources()
 				m.autoSave()
 			}
@@ -539,35 +539,35 @@ func (m *Model) applyPickerSelection() {
 // equips into without prompting. Armor and helmet have a single slot each; a
 // weapon takes the first empty weapon slot. Returns false (open the picker) for
 // untagged items or when every weapon slot is occupied.
-func (m *Model) autoEquipSlot(cat character.ItemCategory) (int, bool) {
+func (m *Model) autoEquipSlot(cat model.ItemCategory) (int, bool) {
 	switch cat {
-	case character.CatArmor:
+	case model.ItemCategoryArmor:
 		return 0, true
-	case character.CatHelmet:
+	case model.ItemCategoryHelmet:
 		return 1, true
-	case character.CatWeapon:
-		for i, w := range m.char.WeaponsAtHand {
+	case model.ItemCategoryWeapon:
+		for i, w := range m.char.Weapons {
 			if w.Name == "" {
 				return 2 + i, true
 			}
 		}
 		return 0, false
-	case character.CatNone:
+	case model.ItemCategoryGeneric:
 		return 0, false
 	}
 	return 0, false
 }
 
 func (m *Model) equipSlotOptions() []string {
-	name := func(it character.Item) string {
+	name := func(it model.Item) string {
 		if it.Name == "" {
 			return "—"
 		}
 		return it.Name
 	}
-	opts := make([]string, 0, 2+len(m.char.WeaponsAtHand))
+	opts := make([]string, 0, 2+len(m.char.Weapons))
 	opts = append(opts, "Armor: "+name(m.char.Armor), "Helmet: "+name(m.char.Helmet))
-	for i, w := range m.char.WeaponsAtHand {
+	for i, w := range m.char.Weapons {
 		opts = append(opts, fmt.Sprintf("Weapon %d: %s", i+1, name(w)))
 	}
 	return opts
@@ -582,25 +582,25 @@ func (m *Model) applyEquip() {
 
 	// Equipping an untagged item into a slot tags it with that slot's category,
 	// matching the auto-tagging Load does for already-slotted items.
-	var displaced character.Item
+	var displaced model.Item
 	switch m.pickSelected {
 	case 0:
-		if item.Category == character.CatNone {
-			item.Category = character.CatArmor
+		if item.Category == model.ItemCategoryGeneric {
+			item.Category = model.ItemCategoryArmor
 		}
 		displaced, m.char.Armor = m.char.Armor, item
 	case 1:
-		if item.Category == character.CatNone {
-			item.Category = character.CatHelmet
+		if item.Category == model.ItemCategoryGeneric {
+			item.Category = model.ItemCategoryHelmet
 		}
 		displaced, m.char.Helmet = m.char.Helmet, item
 	default:
 		wi := m.pickSelected - 2
-		if wi >= 0 && wi < len(m.char.WeaponsAtHand) {
-			if item.Category == character.CatNone {
-				item.Category = character.CatWeapon
+		if wi >= 0 && wi < len(m.char.Weapons) {
+			if item.Category == model.ItemCategoryGeneric {
+				item.Category = model.ItemCategoryWeapon
 			}
-			displaced, m.char.WeaponsAtHand[wi] = m.char.WeaponsAtHand[wi], item
+			displaced, m.char.Weapons[wi] = m.char.Weapons[wi], item
 		}
 	}
 
@@ -620,8 +620,8 @@ func (m *Model) adjustInt(delta int) {
 	case famAttr:
 		// Changing CON or WIL moves the HP/WP maxima, so always re-clamp resources;
 		// for the other attributes the clamp is a harmless no-op.
-		attr := character.AttributeOrder[f.id.index]
-		m.char.Attributes[attr] = character.ClampAttr(m.char.Attributes[attr] + delta)
+		attr := model.AllAttributes[f.id.index]
+		m.char.Attributes[attr] = model.ClampAttribute(m.char.Attributes[attr] + delta)
 		m.char.ClampResources()
 	case famCurrentHP:
 		m.char.CurrentHP = max(0, min(m.char.MaxHP(), m.char.CurrentHP+delta))
@@ -636,8 +636,8 @@ func (m *Model) adjustInt(delta int) {
 			m.char.Inventory[i].Weight = max(1, m.char.Inventory[i].Weight+delta)
 		}
 	case famWeaponDur:
-		if i := f.id.index; i >= 0 && i < len(m.char.WeaponsAtHand) {
-			m.char.WeaponsAtHand[i].Durability = max(0, m.char.WeaponsAtHand[i].Durability+delta)
+		if i := f.id.index; i >= 0 && i < len(m.char.Weapons) {
+			m.char.Weapons[i].Durability = max(0, m.char.Weapons[i].Durability+delta)
 		}
 	case famMagicSkillLevel:
 		if i := f.id.index; i >= 0 && i < len(m.char.MagicSkills) {
@@ -652,14 +652,14 @@ func (m *Model) adjustInt(delta int) {
 // accessor. It is the single source for both rendering and toggling.
 var conditionOrder = []struct {
 	name string
-	ptr  func(*character.Character) *bool
+	ptr  func(*model.Character) *bool
 }{
-	{"Exhausted", func(c *character.Character) *bool { return &c.Conditions.Exhausted }},
-	{"Angry", func(c *character.Character) *bool { return &c.Conditions.Angry }},
-	{"Sickly", func(c *character.Character) *bool { return &c.Conditions.Sickly }},
-	{"Scared", func(c *character.Character) *bool { return &c.Conditions.Scared }},
-	{"Dazed", func(c *character.Character) *bool { return &c.Conditions.Dazed }},
-	{"Disheartened", func(c *character.Character) *bool { return &c.Conditions.Disheartened }},
+	{model.ConditionExhausted, func(c *model.Character) *bool { return &c.Conditions.Exhausted }},
+	{model.ConditionAngry, func(c *model.Character) *bool { return &c.Conditions.Angry }},
+	{model.ConditionSickly, func(c *model.Character) *bool { return &c.Conditions.Sickly }},
+	{model.ConditionScared, func(c *model.Character) *bool { return &c.Conditions.Scared }},
+	{model.ConditionDazed, func(c *model.Character) *bool { return &c.Conditions.Dazed }},
+	{model.ConditionDisheartend, func(c *model.Character) *bool { return &c.Conditions.Disheartened }},
 }
 
 func (m *Model) toggleBool() {
@@ -679,9 +679,9 @@ func (m *Model) toggleBool() {
 			m.char.MagicSkills[i].Advanced = !m.char.MagicSkills[i].Advanced
 		}
 	case famRestRound:
-		m.char.RoundRestUsed = !m.char.RoundRestUsed
+		m.char.UsedRoundRest = !m.char.UsedRoundRest
 	case famRestStretch:
-		m.char.StretchRestUsed = !m.char.StretchRestUsed
+		m.char.UsedShiftRest = !m.char.UsedShiftRest
 	default: // not a boolean field
 	}
 }
@@ -699,7 +699,7 @@ type saveResultMsg struct {
 // flag into a single write command per key press; the actual file write happens
 // off the main loop, so the status bar can show "pending" until it completes.
 func (m *Model) autoSave() {
-	data, err := character.Marshal(m.char)
+	data, err := model.Marshal(m.char)
 	if err != nil {
 		m.saveState = saveFailed
 		m.saveErr = err
@@ -713,30 +713,30 @@ func (m *Model) autoSave() {
 // saveFileCmd writes a snapshot to disk and reports the result.
 func saveFileCmd(path string, data []byte, seq int) tea.Cmd {
 	return func() tea.Msg {
-		return saveResultMsg{seq: seq, err: character.WriteFile(path, data)}
+		return saveResultMsg{seq: seq, err: model.WriteFile(path, data)}
 	}
 }
 
 // stowGear moves the item in an equipped gear slot into inventory and clears the
 // slot. The item keeps its category and stats (tag-only model).
-func (m *Model) stowGear(slot *character.Item) {
+func (m *Model) stowGear(slot *model.Item) {
 	m.char.Inventory = append(m.char.Inventory, *slot)
-	*slot = character.Item{}
+	*slot = model.Item{}
 	m.rebuildFields()
 	m.autoSave()
 }
 
 // gearSlotPtr returns the gear-slot item a gear field belongs to (name or any of
 // its stat fields), or nil if the field is not a gear field.
-func (m *Model) gearSlotPtr(id fieldID) *character.Item {
+func (m *Model) gearSlotPtr(id fieldID) *model.Item {
 	switch id.family {
 	case famArmor:
 		return &m.char.Armor
 	case famHelmet:
 		return &m.char.Helmet
 	case famWeaponAtHand, famWeaponDur:
-		if i := id.index; i >= 0 && i < len(m.char.WeaponsAtHand) {
-			return &m.char.WeaponsAtHand[i]
+		if i := id.index; i >= 0 && i < len(m.char.Weapons) {
+			return &m.char.Weapons[i]
 		}
 	default: // not a gear field
 	}
@@ -764,15 +764,15 @@ func signOf(key string) int {
 func (m *Model) openAbilityPicker() {
 	const nameW = 24
 	var met, unmet []abilityPick
-	for _, h := range character.PredefinedHeroicAbilities {
+	for _, h := range model.CoreHeroicAbilities {
 		display := h.Name
-		if label := character.RequirementLabel(h.Requirements); label != "" {
+		if label := model.RequirementLabel(h.Requirements); label != "" {
 			display = fmt.Sprintf("%-*s %s", nameW, h.Name, label)
 		}
 		ap := abilityPick{
 			name:       h.Name,
 			display:    display,
-			selectable: character.RequirementMet(m.char, h),
+			selectable: model.RequirementMet(m.char, h),
 		}
 		if ap.selectable {
 			met = append(met, ap)
@@ -799,7 +799,7 @@ func (m *Model) applyAbilityPick() {
 		return
 	}
 	if pick.name == "" { // Custom…
-		m.char.HeroicAbilities = append(m.char.HeroicAbilities, character.HeroicAbility{})
+		m.char.HeroicAbilities = append(m.char.HeroicAbilities, model.HeroicAbility{})
 		idx := len(m.char.HeroicAbilities) - 1
 		m.rebuildFields()
 		if fi := m.fieldIndex(idHab(idx)); fi >= 0 {
@@ -808,8 +808,8 @@ func (m *Model) applyAbilityPick() {
 		m.startAbilityEdit(idx)
 		return
 	}
-	var def character.HeroicAbility
-	for _, h := range character.PredefinedHeroicAbilities {
+	var def model.HeroicAbility
+	for _, h := range model.CoreHeroicAbilities {
 		if h.Name == pick.name {
 			def = h
 			break
@@ -819,14 +819,14 @@ func (m *Model) applyAbilityPick() {
 	// adding a duplicate row.
 	if def.HPBonus != 0 || def.WPBonus != 0 {
 		for i := range m.char.HeroicAbilities {
-			if base, qty := character.ParseQty(m.char.HeroicAbilities[i].Name); base == def.Name {
-				m.char.HeroicAbilities[i].Name = character.ApplyQty(base, qty+1)
+			if base, qty := model.ParseQuantity(m.char.HeroicAbilities[i].Name); base == def.Name {
+				m.char.HeroicAbilities[i].Name = model.ApplyQuantity(base, qty+1)
 				m.char.ClampResources()
 				return
 			}
 		}
 	}
-	m.char.HeroicAbilities = append(m.char.HeroicAbilities, character.HeroicAbility{
+	m.char.HeroicAbilities = append(m.char.HeroicAbilities, model.HeroicAbility{
 		Name:         def.Name,
 		WPCost:       def.WPCost,
 		Description:  def.Description,
@@ -949,7 +949,7 @@ func (m *Model) openReqPicker(idx int) {
 		m.reqChosen[r] = true
 	}
 	m.pickOptions = m.pickOptions[:0]
-	for _, sk := range character.CoreSkills {
+	for _, sk := range model.CoreSkills {
 		m.pickOptions = append(m.pickOptions, sk.Name)
 	}
 	m.pickSelected = 0
@@ -973,7 +973,7 @@ func (m Model) handleReqKey(key string) (tea.Model, tea.Cmd) {
 	case keyEnter:
 		// Write selected skills back in predefined order for stable display.
 		var reqs []string
-		for _, sk := range character.CoreSkills {
+		for _, sk := range model.CoreSkills {
 			if m.reqChosen[sk.Name] {
 				reqs = append(reqs, sk.Name)
 			}
@@ -1076,7 +1076,7 @@ func (m *Model) openGrimoire() {
 // handleGrimoireKey drives the grimoire list modal: spells first (indices 0..nSpells-1),
 // then magic tricks. Spell/trick edit and the record pickers overlay this modal.
 func (m Model) handleGrimoireKey(key string) (tea.Model, tea.Cmd) {
-	nSpells := len(m.char.Grimoire)
+	nSpells := len(m.char.Spells)
 	total := nSpells + len(m.char.MagicTricks)
 	switch key {
 	case keyQuit:
@@ -1101,7 +1101,7 @@ func (m Model) handleGrimoireKey(key string) (tea.Model, tea.Cmd) {
 		// Study the grimoire: toggle whether a spell is prepared. Advisory only — the
 		// INT limit is shown but never enforced.
 		if m.grimoireSel < nSpells {
-			m.char.Grimoire[m.grimoireSel].Prepared = !m.char.Grimoire[m.grimoireSel].Prepared
+			m.char.Spells[m.grimoireSel].Prepared = !m.char.Spells[m.grimoireSel].Prepared
 			m.rebuildFields() // the prepared-spells column changed
 			m.clampFocus()
 			m.autoSave()
@@ -1111,8 +1111,8 @@ func (m Model) handleGrimoireKey(key string) (tea.Model, tea.Cmd) {
 		// Predefined spells/tricks are canonical: enter shows a read-only detail popup.
 		// Only custom entries open the editor.
 		if m.grimoireSel < nSpells {
-			sp := m.char.Grimoire[m.grimoireSel]
-			if character.IsPredefinedSpell(sp.Name) {
+			sp := m.char.Spells[m.grimoireSel]
+			if model.IsCoreSpell(sp.Name) {
 				m.detailSpell = sp
 				m.spellDetailMode = true
 				return m, nil
@@ -1122,7 +1122,7 @@ func (m Model) handleGrimoireKey(key string) (tea.Model, tea.Cmd) {
 		}
 		if ti := m.grimoireSel - nSpells; ti >= 0 && ti < len(m.char.MagicTricks) {
 			tr := m.char.MagicTricks[ti]
-			if character.IsPredefinedTrick(tr.Name) {
+			if model.IsCoreMagicTrick(tr.Name) {
 				m.detailTrick = tr
 				m.trickDetailMode = true
 				return m, nil
@@ -1133,11 +1133,11 @@ func (m Model) handleGrimoireKey(key string) (tea.Model, tea.Cmd) {
 		return m, nil
 	case keyRemove:
 		if m.grimoireSel < nSpells {
-			m.char.Grimoire = append(m.char.Grimoire[:m.grimoireSel], m.char.Grimoire[m.grimoireSel+1:]...)
+			m.char.Spells = append(m.char.Spells[:m.grimoireSel], m.char.Spells[m.grimoireSel+1:]...)
 		} else if ti := m.grimoireSel - nSpells; ti >= 0 && ti < len(m.char.MagicTricks) {
 			m.char.MagicTricks = append(m.char.MagicTricks[:ti], m.char.MagicTricks[ti+1:]...)
 		}
-		if newTotal := len(m.char.Grimoire) + len(m.char.MagicTricks); m.grimoireSel >= newTotal {
+		if newTotal := len(m.char.Spells) + len(m.char.MagicTricks); m.grimoireSel >= newTotal {
 			m.grimoireSel = max(0, newTotal-1)
 		}
 		m.rebuildFields()
@@ -1154,7 +1154,7 @@ func (m *Model) openMagicSkillPicker() {
 		known[sk.Name] = true
 	}
 	m.pickOptions = m.pickOptions[:0]
-	for _, def := range character.MagicSkillDefs {
+	for _, def := range model.MagicSkills {
 		if !known[def.Name] {
 			m.pickOptions = append(m.pickOptions, def.Name)
 		}
@@ -1172,10 +1172,10 @@ func (m *Model) applyMagicSkillPick() {
 		return
 	}
 	name := m.pickOptions[m.pickSelected]
-	for _, def := range character.MagicSkillDefs {
+	for _, def := range model.MagicSkills {
 		if def.Name == name {
 			sk := def
-			sk.Level = character.UntrainedSkillLevel
+			sk.Level = model.UntrainedSkillLevel
 			m.char.MagicSkills = append(m.char.MagicSkills, sk)
 			break
 		}
@@ -1202,17 +1202,17 @@ func (m *Model) openAddMagicPicker() {
 		}
 	}
 	// Spells and tricks already recorded are omitted: each can be learned only once.
-	for _, sp := range character.PredefinedSpells {
+	for _, sp := range model.PredefinedSpells {
 		if m.char.KnowsSpell(sp.Name) {
 			continue
 		}
-		add(namePick{name: sp.Name, display: sp.Name, selectable: character.SpellAvailable(m.char, sp)})
+		add(namePick{name: sp.Name, display: sp.Name, selectable: model.IsSpellAvailable(m.char, sp)})
 	}
-	for _, tr := range character.PredefinedTricks {
-		if m.char.KnowsTrick(tr.Name) {
+	for _, tr := range model.CoreMagicTricks {
+		if m.char.KnowsMagicTrick(tr.Name) {
 			continue
 		}
-		add(namePick{name: tr.Name, display: tr.Name, trick: true, selectable: character.TrickAvailable(m.char, tr)})
+		add(namePick{name: tr.Name, display: tr.Name, trick: true, selectable: model.IsMagicTrickAvailable(m.char, tr)})
 	}
 	byName := func(a, b namePick) int { return strings.Compare(a.display, b.display) }
 	slices.SortFunc(avail, byName)
@@ -1243,12 +1243,12 @@ func (m *Model) applyMagicPick() {
 // with valid enum defaults (so cycling works) is created and its editor opened.
 func (m *Model) addSpell(name string) {
 	if name == "" {
-		m.char.Grimoire = append(m.char.Grimoire, character.Spell{
-			School:      character.Animism,
-			CastingTime: character.CastAction,
-			Duration:    character.DurInstant,
+		m.char.Spells = append(m.char.Spells, model.Spell{
+			School:      model.MagiclSchoolAnimism,
+			CastingTime: model.CastingTimeAction,
+			Duration:    model.SpellDurationInstant,
 		})
-		idx := len(m.char.Grimoire) - 1
+		idx := len(m.char.Spells) - 1
 		m.grimoireSel = idx
 		m.rebuildFields()
 		m.startSpellEdit(idx)
@@ -1257,12 +1257,12 @@ func (m *Model) addSpell(name string) {
 	if m.char.KnowsSpell(name) { // a spell can be learned only once
 		return
 	}
-	for _, sp := range character.PredefinedSpells {
+	for _, sp := range model.PredefinedSpells {
 		if sp.Name == name {
 			cp := sp
 			cp.Prerequisites = append([]string(nil), sp.Prerequisites...)
 			cp.Requirements = append([]string(nil), sp.Requirements...)
-			m.char.Grimoire = append(m.char.Grimoire, cp)
+			m.char.Spells = append(m.char.Spells, cp)
 			break
 		}
 	}
@@ -1273,16 +1273,16 @@ func (m *Model) addSpell(name string) {
 // its editor opened.
 func (m *Model) addTrick(name string) {
 	if name == "" {
-		m.char.MagicTricks = append(m.char.MagicTricks, character.MagicTrick{School: character.Animism})
+		m.char.MagicTricks = append(m.char.MagicTricks, model.MagicTrick{School: model.MagiclSchoolAnimism})
 		idx := len(m.char.MagicTricks) - 1
-		m.grimoireSel = len(m.char.Grimoire) + idx
+		m.grimoireSel = len(m.char.Spells) + idx
 		m.startTrickEdit(idx)
 		return
 	}
-	if m.char.KnowsTrick(name) { // a trick can be learned only once
+	if m.char.KnowsMagicTrick(name) { // a trick can be learned only once
 		return
 	}
-	for _, tr := range character.PredefinedTricks {
+	for _, tr := range model.CoreMagicTricks {
 		if tr.Name == name {
 			m.char.MagicTricks = append(m.char.MagicTricks, tr)
 			break
@@ -1300,7 +1300,7 @@ func (m *Model) startSpellEdit(idx int) {
 // syncSpellFocus focuses the text input for the active modal field (none for the enum or
 // prerequisites fields) and seeds it from the spell's current value.
 func (m *Model) syncSpellFocus() {
-	sp := m.char.Grimoire[m.spellIndex]
+	sp := m.char.Spells[m.spellIndex]
 	m.spellName.Blur()
 	m.spellRank.Blur()
 	m.spellRange.Blur()
@@ -1332,10 +1332,10 @@ func (m *Model) syncSpellFocus() {
 
 func (m *Model) commitCurrentSpellField() {
 	idx := m.spellIndex
-	if idx < 0 || idx >= len(m.char.Grimoire) {
+	if idx < 0 || idx >= len(m.char.Spells) {
 		return
 	}
-	sp := &m.char.Grimoire[idx]
+	sp := &m.char.Spells[idx]
 	switch m.spellActive {
 	case spellFieldName:
 		sp.Name = m.spellName.Value()
@@ -1421,17 +1421,17 @@ func (m Model) handleSpellKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 // cycleSpellEnum advances the active enum field by dir (±1) and reports whether the
 // active field was an enum field (so text fields can fall through to the text input).
 func (m *Model) cycleSpellEnum(active, dir int) bool {
-	if m.spellIndex < 0 || m.spellIndex >= len(m.char.Grimoire) {
+	if m.spellIndex < 0 || m.spellIndex >= len(m.char.Spells) {
 		return false
 	}
-	sp := &m.char.Grimoire[m.spellIndex]
+	sp := &m.char.Spells[m.spellIndex]
 	switch active {
 	case spellFieldSchool:
-		sp.School = character.School(cycleEnum(toStrings(character.AllSchools), string(sp.School), dir))
+		sp.School = model.MagicSchool(cycleEnum(toStrings(model.AllMagicSchools), string(sp.School), dir))
 	case spellFieldCasting:
-		sp.CastingTime = character.CastingTime(cycleEnum(toStrings(character.AllCastingTimes), string(sp.CastingTime), dir))
+		sp.CastingTime = model.CastingTime(cycleEnum(toStrings(model.AllCastingTimes), string(sp.CastingTime), dir))
 	case spellFieldDuration:
-		sp.Duration = character.Duration(cycleEnum(toStrings(character.AllDurations), string(sp.Duration), dir))
+		sp.Duration = model.SpellDuration(cycleEnum(toStrings(model.AllSpellDurations), string(sp.Duration), dir))
 	default:
 		return false
 	}
@@ -1488,7 +1488,7 @@ func (m Model) handleTrickKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	if (key == keyLeft || key == keyRight) && m.trickActive == trickFieldSchool {
 		if idx := m.trickIndex; idx >= 0 && idx < len(m.char.MagicTricks) {
 			tr := &m.char.MagicTricks[idx]
-			tr.School = character.School(cycleEnum(toStrings(character.AllSchools), string(tr.School), arrowSign(key)))
+			tr.School = model.MagicSchool(cycleEnum(toStrings(model.AllMagicSchools), string(tr.School), arrowSign(key)))
 			m.autoSave()
 		}
 		return m, nil
@@ -1527,11 +1527,11 @@ func (m *Model) openPrereqPicker(idx int) {
 	m.prereqMode = true
 	m.prereqIndex = idx
 	m.prereqChosen = make(map[string]bool)
-	for _, r := range m.char.Grimoire[idx].Prerequisites {
+	for _, r := range m.char.Spells[idx].Prerequisites {
 		m.prereqChosen[r] = true
 	}
 	m.pickOptions = m.pickOptions[:0]
-	for i, sp := range m.char.Grimoire {
+	for i, sp := range m.char.Spells {
 		if i == idx || sp.Name == "" {
 			continue
 		}
@@ -1565,8 +1565,8 @@ func (m Model) handlePrereqKey(key string) (tea.Model, tea.Cmd) {
 				prereqs = append(prereqs, name)
 			}
 		}
-		if m.prereqIndex >= 0 && m.prereqIndex < len(m.char.Grimoire) {
-			m.char.Grimoire[m.prereqIndex].Prerequisites = prereqs
+		if m.prereqIndex >= 0 && m.prereqIndex < len(m.char.Spells) {
+			m.char.Spells[m.prereqIndex].Prerequisites = prereqs
 		}
 		m.prereqMode = false
 		m.autoSave()
@@ -1640,28 +1640,28 @@ const (
 )
 
 // itemCategoryOrder is the cycle order for the category enum field.
-var itemCategoryOrder = []character.ItemCategory{
-	character.CatNone, character.CatArmor, character.CatHelmet, character.CatWeapon,
+var itemCategoryOrder = []model.ItemCategory{
+	model.ItemCategoryGeneric, model.ItemCategoryArmor, model.ItemCategoryHelmet, model.ItemCategoryWeapon,
 }
 
 // itemFieldVisible reports whether a modal field applies to the given category.
-func itemFieldVisible(fieldIdx int, cat character.ItemCategory) bool {
+func itemFieldVisible(fieldIdx int, cat model.ItemCategory) bool {
 	switch fieldIdx {
 	case itemFieldName, itemFieldWeight, itemFieldCategory:
 		return true
 	case itemFieldRating:
-		return cat == character.CatArmor || cat == character.CatHelmet
+		return cat == model.ItemCategoryArmor || cat == model.ItemCategoryHelmet
 	case itemFieldBaneSneak, itemFieldBaneEvade, itemFieldBaneAcro:
-		return cat == character.CatArmor
+		return cat == model.ItemCategoryArmor
 	case itemFieldBaneAware, itemFieldBaneRanged:
-		return cat == character.CatHelmet
+		return cat == model.ItemCategoryHelmet
 	case itemFieldGrip, itemFieldRange, itemFieldDamage, itemFieldDur, itemFieldFeatures:
-		return cat == character.CatWeapon
+		return cat == model.ItemCategoryWeapon
 	}
 	return false
 }
 
-func (m *Model) startItemEdit(it *character.Item) {
+func (m *Model) startItemEdit(it *model.Item) {
 	if it.Weight < 1 {
 		it.Weight = 1 // items weigh at least 1 slot; only tiny items are weightless
 	}
@@ -1746,7 +1746,7 @@ func (m *Model) closeItemEdit() {
 // stepItemField moves dir (±1) to the next field visible for the item's category,
 // wrapping around.
 func (m *Model) stepItemField(active, dir int) int {
-	cat := character.CatNone
+	cat := model.ItemCategoryGeneric
 	if m.itemTarget != nil {
 		cat = m.itemTarget.Category
 	}
@@ -1783,14 +1783,14 @@ func (m *Model) cycleGrip(dir int) {
 		return
 	}
 	cur := 0
-	for i, g := range character.GripOrder {
+	for i, g := range model.AllGrips {
 		if g == it.Grip {
 			cur = i
 			break
 		}
 	}
-	n := len(character.GripOrder)
-	it.Grip = character.GripOrder[((cur+dir)%n+n)%n]
+	n := len(model.AllGrips)
+	it.Grip = model.AllGrips[((cur+dir)%n+n)%n]
 }
 
 // toggleItemBane toggles the bane for the active field, reporting whether the
@@ -1802,15 +1802,15 @@ func (m *Model) toggleItemBane() bool {
 	}
 	switch m.itemActive {
 	case itemFieldBaneSneak:
-		it.BaneSneaking = !it.BaneSneaking
+		it.BaneToSneaking = !it.BaneToSneaking
 	case itemFieldBaneEvade:
-		it.BaneEvade = !it.BaneEvade
+		it.BaneToEvade = !it.BaneToEvade
 	case itemFieldBaneAcro:
-		it.BaneAcrobatics = !it.BaneAcrobatics
+		it.BaneToAcrobatics = !it.BaneToAcrobatics
 	case itemFieldBaneAware:
-		it.BaneAwareness = !it.BaneAwareness
+		it.BaneToAwareness = !it.BaneToAwareness
 	case itemFieldBaneRanged:
-		it.BaneRanged = !it.BaneRanged
+		it.BaneToRanged = !it.BaneToRanged
 	default:
 		return false
 	}
@@ -1819,7 +1819,7 @@ func (m *Model) toggleItemBane() bool {
 
 // normalizeItemStats zeroes stat fields that do not belong to the item's category
 // so stale values from a previous category never persist.
-func normalizeItemStats(it *character.Item) {
+func normalizeItemStats(it *model.Item) {
 	clearWeapon := func() {
 		it.Grip = ""
 		it.Range = 0
@@ -1827,21 +1827,21 @@ func normalizeItemStats(it *character.Item) {
 		it.Durability = 0
 		it.Features = nil
 	}
-	clearArmorBanes := func() { it.BaneSneaking, it.BaneEvade, it.BaneAcrobatics = false, false, false }
-	clearHelmetBanes := func() { it.BaneAwareness, it.BaneRanged = false, false }
+	clearArmorBanes := func() { it.BaneToSneaking, it.BaneToEvade, it.BaneToAcrobatics = false, false, false }
+	clearHelmetBanes := func() { it.BaneToAwareness, it.BaneToRanged = false, false }
 	switch it.Category {
-	case character.CatArmor:
+	case model.ItemCategoryArmor:
 		clearHelmetBanes()
 		clearWeapon()
-	case character.CatHelmet:
+	case model.ItemCategoryHelmet:
 		clearArmorBanes()
 		clearWeapon()
-	case character.CatWeapon:
+	case model.ItemCategoryWeapon:
 		it.ArmorRating = 0
 		clearArmorBanes()
 		clearHelmetBanes()
 		if it.Grip == "" {
-			it.Grip = character.Grip1H
+			it.Grip = model.Grip1H
 		}
 	default: // CatNone
 		it.ArmorRating = 0

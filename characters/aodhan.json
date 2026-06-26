@@ -1,0 +1,289 @@
+{
+  "name": "Archmaster Aodhan",
+  "kin": "Human",
+  "profession": "Mage",
+  "age": "Old",
+  "attributes": {
+    "AGL": 9,
+    "CHA": 14,
+    "CON": 11,
+    "INT": 16,
+    "STR": 8,
+    "WIL": 18
+  },
+  "current_hp": 11,
+  "current_wp": 10,
+  "conditions": {
+    "exhausted": false,
+    "sickly": false,
+    "dazed": false,
+    "angry": false,
+    "scared": false,
+    "disheartened": false
+  },
+  "round_rest_used": false,
+  "stretch_rest_used": false,
+  "skills": [
+    {
+      "name": "Acrobatics",
+      "level": 5,
+      "advanced": false
+    },
+    {
+      "name": "Awareness",
+      "level": 14,
+      "advanced": false
+    },
+    {
+      "name": "Bartering",
+      "level": 6,
+      "advanced": false
+    },
+    {
+      "name": "Beast Lore",
+      "level": 14,
+      "advanced": false
+    },
+    {
+      "name": "Bluffing",
+      "level": 6,
+      "advanced": false
+    },
+    {
+      "name": "Bushcraft",
+      "level": 14,
+      "advanced": false
+    },
+    {
+      "name": "Crafting",
+      "level": 4,
+      "advanced": false
+    },
+    {
+      "name": "Evade",
+      "level": 10,
+      "advanced": false
+    },
+    {
+      "name": "Healing",
+      "level": 14,
+      "advanced": false
+    },
+    {
+      "name": "Hunting \u0026 Fishing",
+      "level": 5,
+      "advanced": false
+    },
+    {
+      "name": "Languages",
+      "level": 14,
+      "advanced": false
+    },
+    {
+      "name": "Myths \u0026 Legends",
+      "level": 14,
+      "advanced": false
+    },
+    {
+      "name": "Performance",
+      "level": 6,
+      "advanced": false
+    },
+    {
+      "name": "Persuasion",
+      "level": 12,
+      "advanced": false
+    },
+    {
+      "name": "Riding",
+      "level": 5,
+      "advanced": false
+    },
+    {
+      "name": "Seamanship",
+      "level": 7,
+      "advanced": false
+    },
+    {
+      "name": "Sleight of Hand",
+      "level": 5,
+      "advanced": false
+    },
+    {
+      "name": "Sneaking",
+      "level": 10,
+      "advanced": false
+    },
+    {
+      "name": "Spot Hidden",
+      "level": 14,
+      "advanced": false
+    },
+    {
+      "name": "Swimming",
+      "level": 5,
+      "advanced": false
+    },
+    {
+      "name": "Axes",
+      "level": 4,
+      "advanced": false
+    },
+    {
+      "name": "Bows",
+      "level": 5,
+      "advanced": false
+    },
+    {
+      "name": "Brawling",
+      "level": 4,
+      "advanced": false
+    },
+    {
+      "name": "Crossbows",
+      "level": 5,
+      "advanced": false
+    },
+    {
+      "name": "Hammers",
+      "level": 4,
+      "advanced": false
+    },
+    {
+      "name": "Knives",
+      "level": 5,
+      "advanced": false
+    },
+    {
+      "name": "Slings",
+      "level": 5,
+      "advanced": false
+    },
+    {
+      "name": "Spears",
+      "level": 4,
+      "advanced": false
+    },
+    {
+      "name": "Staves",
+      "level": 10,
+      "advanced": false
+    },
+    {
+      "name": "Swords",
+      "level": 4,
+      "advanced": false
+    }
+  ],
+  "weakness": {
+    "name": "Fainthearted",
+    "description": "You always stay at the back of the group."
+  },
+  "armor": {
+    "name": "",
+    "weight": 1
+  },
+  "helmet": {
+    "name": "",
+    "weight": 1
+  },
+  "weapons_at_hand": [
+    {
+      "name": "",
+      "weight": 1
+    },
+    {
+      "name": "",
+      "weight": 1
+    },
+    {
+      "name": "",
+      "weight": 1
+    }
+  ],
+  "inventory": [
+    {
+      "name": "Grimoire",
+      "weight": 1
+    },
+    {
+      "name": "Torch",
+      "weight": 1
+    }
+  ],
+  "tiny_items": [
+    "Worn diary"
+  ],
+  "heroic_abilities": [],
+  "magic_skills": [
+    {
+      "name": "Elementalism",
+      "level": 14,
+      "advanced": false
+    }
+  ],
+  "grimoire": [
+    {
+      "name": "Fireball",
+      "school": "Elementalism",
+      "rank": 1,
+      "prerequisites": null,
+      "requirements": [
+        "Word",
+        "gesture"
+      ],
+      "casting_time": "Action",
+      "range": "20m",
+      "duration": "Instant",
+      "description": "The spell sends a fireball from your hand or focus at the target. The fireball can be dodged or parried as a ranged attack. The fireball inflicts 2D6 damage on a hit and sets fire to flammable objects. Each power level beyond the first increases the damage by D6 or creates another fireball that hits another target within range.",
+      "prepared": true
+    },
+    {
+      "name": "Pillar",
+      "school": "Elementalism",
+      "rank": 1,
+      "prerequisites": null,
+      "requirements": [
+        "Word",
+        "gesture"
+      ],
+      "casting_time": "Action",
+      "range": "10m",
+      "duration": "Shift",
+      "description": "The spell raises a pillar, three meters high and one meter wide, from the ground or a stone floor. If someone is standing in that spot, the victim must make an ACROBATICS roll (not an action) to avoid falling off the pillar. If the pillar is created under a low ceiling and the roll fails, the victim takes 2D6 bludgeoning damage instead. For each additional power level, the height of the pillar increases by three meters, which can mean falling damage to anyone who falls off.",
+      "prepared": true
+    },
+    {
+      "name": "Gust of Wind",
+      "school": "Elementalism",
+      "rank": 1,
+      "prerequisites": null,
+      "requirements": [
+        "Word",
+        "gesture"
+      ],
+      "casting_time": "Action",
+      "range": "10m (cone)",
+      "duration": "Instant",
+      "description": "The spell summons a great gust of wind. All untethered objects and creatures up to human size in the area of effect are pushed 2D4 meters away from you and suffer the same amount of bludgeoning damage. Against a swarm the spell deals 2D6 damage. Each additional power level increases the number of dice by one. The spell has no effect on monsters that are Large or Huge.",
+      "prepared": true
+    }
+  ],
+  "magic_tricks": [
+    {
+      "name": "Puff of Smoke",
+      "school": "Elementalism",
+      "description": "An impressive puff of smoke erupts in front of you. Very popular for dramatic entrances, and can give you a boon to SNEAKING in certain situations as determined by the GM."
+    },
+    {
+      "name": "Ignite",
+      "school": "Elementalism",
+      "description": "You light or extinguish a candle, torch, or lantern within 10 meters."
+    },
+    {
+      "name": "Heat/Chill",
+      "school": "Elementalism",
+      "description": "The area within 10 meters of you becomes pleasantly warm or cold. The effect protects against cold for one shift of time."
+    }
+  ]
+}
