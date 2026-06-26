@@ -95,16 +95,8 @@ const (
 	famSkillLevel // index → Character.Skills
 	famSkillAdv   // index → Character.Skills
 	famArmor
-	famArmorRating
-	famArmorBaneSneak
-	famArmorBaneEvade
-	famArmorBaneAcro
 	famHelmet
-	famHelmetRating
-	famHelmetBaneAware
-	famHelmetBaneRanged
 	famWeaponAtHand // index → Character.WeaponsAtHand
-	famWeaponRange  // index → Character.WeaponsAtHand
 	famWeaponDur    // index → Character.WeaponsAtHand
 	famInvName      // index → Character.Inventory
 	famInvWeight    // index → Character.Inventory
@@ -142,14 +134,7 @@ var (
 	idRestRound     = fieldID{family: famRestRound}
 	idRestStretch   = fieldID{family: famRestStretch}
 	idArmor         = fieldID{family: famArmor}
-	idArmorRating   = fieldID{family: famArmorRating}
-	idArmorSneak    = fieldID{family: famArmorBaneSneak}
-	idArmorEvade    = fieldID{family: famArmorBaneEvade}
-	idArmorAcro     = fieldID{family: famArmorBaneAcro}
 	idHelmet        = fieldID{family: famHelmet}
-	idHelmetRating  = fieldID{family: famHelmetRating}
-	idHelmetAware   = fieldID{family: famHelmetBaneAware}
-	idHelmetRanged  = fieldID{family: famHelmetBaneRanged}
 	idInvEmpty      = fieldID{family: famInvEmpty}
 	idTinyEmpty     = fieldID{family: famTinyEmpty}
 	idHabEmpty      = fieldID{family: famHabEmpty}
@@ -162,7 +147,6 @@ func idCondition(i int) fieldID    { return fieldID{famCondition, i} }
 func idSkillLevel(i int) fieldID   { return fieldID{famSkillLevel, i} }
 func idSkillAdv(i int) fieldID     { return fieldID{famSkillAdv, i} }
 func idWeaponAtHand(i int) fieldID { return fieldID{famWeaponAtHand, i} }
-func idWeaponRange(i int) fieldID  { return fieldID{famWeaponRange, i} }
 func idWeaponDur(i int) fieldID    { return fieldID{famWeaponDur, i} }
 func idInvName(i int) fieldID      { return fieldID{famInvName, i} }
 func idInvWeight(i int) fieldID    { return fieldID{famInvWeight, i} }
@@ -204,15 +188,33 @@ const (
 	secMagic      = 10
 )
 
+// saveState tracks whether the latest in-memory changes have reached disk. It
+// drives the indicator in the status bar.
+type saveState int
+
+const (
+	saveSaved   saveState = iota // disk matches the latest change
+	savePending                  // a write is in flight
+	saveFailed                   // the most recent write errored
+)
+
 // Model mixes value and pointer receivers by necessity: bubbletea's tea.Model
 // requires value-receiver Init/Update/View, while the mutating helpers take a
 // pointer receiver.
 //
 //nolint:recvcheck // see above
 type Model struct {
-	char   *character.Character
-	path   string
-	status string
+	char *character.Character
+	path string
+
+	// Asynchronous autosave bookkeeping. autoSave marshals a snapshot and marks
+	// dirty; Update issues one write command per key and reconciles the result.
+	saveState   saveState
+	saveErr     error
+	dirty       bool
+	pendingSave []byte
+	saveSeq     int
+	quitting    bool // quit was requested; defer until the in-flight write finishes
 
 	width  int
 	height int
@@ -406,19 +408,11 @@ func visualLayout(c *character.Character) [][]fieldID {
 
 	// Gear section. Each slot's name is always focusable; its stat fields appear
 	// only when the slot holds an item (Name != ""). See view.go viewGear.
-	armorRow := []fieldID{idArmor}
-	if c.Armor.Name != "" {
-		armorRow = append(armorRow, idArmorRating, idArmorSneak, idArmorEvade, idArmorAcro)
-	}
-	helmetRow := []fieldID{idHelmet}
-	if c.Helmet.Name != "" {
-		helmetRow = append(helmetRow, idHelmetRating, idHelmetAware, idHelmetRanged)
-	}
-	rows = append(rows, armorRow, helmetRow)
+	rows = append(rows, []fieldID{idArmor}, []fieldID{idHelmet})
 	for i := range 3 {
 		weaponRow := []fieldID{idWeaponAtHand(i)}
 		if i < len(c.WeaponsAtHand) && c.WeaponsAtHand[i].Name != "" {
-			weaponRow = append(weaponRow, idWeaponRange(i), idWeaponDur(i))
+			weaponRow = append(weaponRow, idWeaponDur(i))
 		}
 		rows = append(rows, weaponRow)
 	}
@@ -499,10 +493,8 @@ func metaFor(id fieldID) field {
 		return mk(kindBool, secSkills)
 	case famArmor, famHelmet, famWeaponAtHand:
 		return mk(kindText, secGear)
-	case famArmorRating, famHelmetRating, famWeaponRange, famWeaponDur:
+	case famWeaponDur:
 		return mk(kindInt, secGear)
-	case famArmorBaneSneak, famArmorBaneEvade, famArmorBaneAcro, famHelmetBaneAware, famHelmetBaneRanged:
-		return mk(kindBool, secGear)
 	case famInvName:
 		return mk(kindText, secInventory)
 	case famInvWeight:

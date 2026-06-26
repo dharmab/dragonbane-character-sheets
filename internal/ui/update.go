@@ -48,8 +48,37 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.width = msg.Width
 		m.height = msg.Height
 		return m, nil
+	case saveResultMsg:
+		// Ignore results from saves that a newer change has already superseded.
+		if msg.seq == m.saveSeq {
+			if msg.err != nil {
+				m.saveState = saveFailed
+				m.saveErr = msg.err
+			} else {
+				m.saveState = saveSaved
+				m.saveErr = nil
+			}
+			// A quit was deferred for this write; the latest change is now on disk
+			// (or its write has failed), so it is safe to exit.
+			if m.quitting {
+				return m, tea.Quit
+			}
+		}
+		return m, nil
 	case tea.KeyPressMsg:
-		return m.handleKey(msg)
+		model, cmd := m.handleKey(msg)
+		nm, ok := model.(Model)
+		if !ok {
+			return model, cmd
+		}
+		// A key handler may have called autoSave (one or more times); coalesce it
+		// into a single write command for this key press.
+		if nm.dirty {
+			nm.dirty = false
+			nm.saveSeq++
+			return nm, tea.Batch(cmd, saveFileCmd(nm.path, nm.pendingSave, nm.saveSeq))
+		}
+		return nm, cmd
 	}
 	return m, nil
 }
@@ -133,6 +162,12 @@ func (m Model) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 
 	switch key {
 	case keyQuit, keyQuitAlt:
+		// If a write is still in flight, defer quitting until its result arrives
+		// so changes are never lost.
+		if m.saveState == savePending {
+			m.quitting = true
+			return m, nil
+		}
 		return m, tea.Quit
 	case keySave:
 		m.autoSave()
@@ -200,6 +235,16 @@ func (m Model) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 			}
 		case keyDonDoff:
 			if inBounds {
+				// A categorized item knows its slot, so equip it directly; only
+				// fall back to the picker for untagged items (or full weapon slots).
+				if slot, ok := m.autoEquipSlot(m.char.Inventory[idx].Category); ok {
+					m.pickEquipSource = idx
+					m.pickSelected = slot
+					m.applyEquip()
+					m.pickEquipSource = -1
+					m.autoSave()
+					return m, nil
+				}
 				m.pickEquipSource = idx
 				m.pickOptions = m.equipSlotOptions()
 				m.pickSelected = 0
@@ -490,6 +535,29 @@ func (m *Model) applyPickerSelection() {
 	}
 }
 
+// autoEquipSlot returns the pickSelected slot index an item of the given category
+// equips into without prompting. Armor and helmet have a single slot each; a
+// weapon takes the first empty weapon slot. Returns false (open the picker) for
+// untagged items or when every weapon slot is occupied.
+func (m *Model) autoEquipSlot(cat character.ItemCategory) (int, bool) {
+	switch cat {
+	case character.CatArmor:
+		return 0, true
+	case character.CatHelmet:
+		return 1, true
+	case character.CatWeapon:
+		for i, w := range m.char.WeaponsAtHand {
+			if w.Name == "" {
+				return 2 + i, true
+			}
+		}
+		return 0, false
+	case character.CatNone:
+		return 0, false
+	}
+	return 0, false
+}
+
 func (m *Model) equipSlotOptions() []string {
 	name := func(it character.Item) string {
 		if it.Name == "" {
@@ -567,14 +635,6 @@ func (m *Model) adjustInt(delta int) {
 		if i := f.id.index; i >= 0 && i < len(m.char.Inventory) {
 			m.char.Inventory[i].Weight = max(1, m.char.Inventory[i].Weight+delta)
 		}
-	case famArmorRating:
-		m.char.Armor.ArmorRating = max(0, m.char.Armor.ArmorRating+delta)
-	case famHelmetRating:
-		m.char.Helmet.ArmorRating = max(0, m.char.Helmet.ArmorRating+delta)
-	case famWeaponRange:
-		if i := f.id.index; i >= 0 && i < len(m.char.WeaponsAtHand) {
-			m.char.WeaponsAtHand[i].Range = max(0, m.char.WeaponsAtHand[i].Range+delta)
-		}
 	case famWeaponDur:
 		if i := f.id.index; i >= 0 && i < len(m.char.WeaponsAtHand) {
 			m.char.WeaponsAtHand[i].Durability = max(0, m.char.WeaponsAtHand[i].Durability+delta)
@@ -622,25 +682,38 @@ func (m *Model) toggleBool() {
 		m.char.RoundRestUsed = !m.char.RoundRestUsed
 	case famRestStretch:
 		m.char.StretchRestUsed = !m.char.StretchRestUsed
-	case famArmorBaneSneak:
-		m.char.Armor.BaneSneaking = !m.char.Armor.BaneSneaking
-	case famArmorBaneEvade:
-		m.char.Armor.BaneEvade = !m.char.Armor.BaneEvade
-	case famArmorBaneAcro:
-		m.char.Armor.BaneAcrobatics = !m.char.Armor.BaneAcrobatics
-	case famHelmetBaneAware:
-		m.char.Helmet.BaneAwareness = !m.char.Helmet.BaneAwareness
-	case famHelmetBaneRanged:
-		m.char.Helmet.BaneRanged = !m.char.Helmet.BaneRanged
 	default: // not a boolean field
 	}
 }
 
+// saveResultMsg reports the outcome of an asynchronous file write. seq matches
+// the save it came from so stale results (superseded by a newer change) are
+// ignored.
+type saveResultMsg struct {
+	seq int
+	err error
+}
+
+// autoSave snapshots the character to bytes now (in the Update goroutine, so no
+// race with later mutations) and marks the model dirty. Update turns the dirty
+// flag into a single write command per key press; the actual file write happens
+// off the main loop, so the status bar can show "pending" until it completes.
 func (m *Model) autoSave() {
-	if err := character.Save(m.path, m.char); err != nil {
-		m.status = "Save error: " + err.Error()
-	} else {
-		m.status = ""
+	data, err := character.Marshal(m.char)
+	if err != nil {
+		m.saveState = saveFailed
+		m.saveErr = err
+		return
+	}
+	m.pendingSave = data
+	m.saveState = savePending
+	m.dirty = true
+}
+
+// saveFileCmd writes a snapshot to disk and reports the result.
+func saveFileCmd(path string, data []byte, seq int) tea.Cmd {
+	return func() tea.Msg {
+		return saveResultMsg{seq: seq, err: character.WriteFile(path, data)}
 	}
 }
 
@@ -657,11 +730,11 @@ func (m *Model) stowGear(slot *character.Item) {
 // its stat fields), or nil if the field is not a gear field.
 func (m *Model) gearSlotPtr(id fieldID) *character.Item {
 	switch id.family {
-	case famArmor, famArmorRating, famArmorBaneSneak, famArmorBaneEvade, famArmorBaneAcro:
+	case famArmor:
 		return &m.char.Armor
-	case famHelmet, famHelmetRating, famHelmetBaneAware, famHelmetBaneRanged:
+	case famHelmet:
 		return &m.char.Helmet
-	case famWeaponAtHand, famWeaponRange, famWeaponDur:
+	case famWeaponAtHand, famWeaponDur:
 		if i := id.index; i >= 0 && i < len(m.char.WeaponsAtHand) {
 			return &m.char.WeaponsAtHand[i]
 		}
@@ -1589,6 +1662,9 @@ func itemFieldVisible(fieldIdx int, cat character.ItemCategory) bool {
 }
 
 func (m *Model) startItemEdit(it *character.Item) {
+	if it.Weight < 1 {
+		it.Weight = 1 // items weigh at least 1 slot; only tiny items are weightless
+	}
 	m.itemMode = true
 	m.itemTarget = it
 	m.itemActive = itemFieldName

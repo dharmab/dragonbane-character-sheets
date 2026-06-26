@@ -483,8 +483,8 @@ func (m Model) viewSkills(w int) string {
 func (m Model) viewGear() string {
 	nameCol := lipgloss.NewStyle().Width(16)
 	arCol := lipgloss.NewStyle().Width(2).Align(lipgloss.Right)
-	gripCol := lipgloss.NewStyle().Width(4)
-	dmgCol := lipgloss.NewStyle().Width(8)
+	gripCol := lipgloss.NewStyle().Width(3)
+	dmgCol := lipgloss.NewStyle().Width(4)
 	rngCol := lipgloss.NewStyle().Width(4).Align(lipgloss.Right)
 	numCol := lipgloss.NewStyle().Width(3).Align(lipgloss.Right)
 
@@ -493,6 +493,14 @@ func (m Model) viewGear() string {
 			name = "—"
 		}
 		return nameCol.Render(m.ftext(id, name))
+	}
+	// AR, banes, grip, damage and range don't change in play, so they are
+	// read-only here (edit them in the item modal); only durability is focusable.
+	bane := func(name string, val bool) string {
+		if val {
+			return "[x] " + name
+		}
+		return "[ ] " + name
 	}
 
 	lines := []string{sHdr.Render(" GEAR")}
@@ -505,12 +513,12 @@ func (m Model) viewGear() string {
 		lines = append(lines, " "+nameCell(idArmor, ""))
 	} else {
 		banes := strings.Join([]string{
-			m.fbool(idArmorSneak, "Sneaking", a.BaneSneaking),
-			m.fbool(idArmorEvade, "Evade", a.BaneEvade),
-			m.fbool(idArmorAcro, "Acrobatics", a.BaneAcrobatics),
+			bane("Sneaking", a.BaneSneaking),
+			bane("Evade", a.BaneEvade),
+			bane("Acrobatics", a.BaneAcrobatics),
 		}, "  ")
 		lines = append(lines, abHdr,
-			" "+nameCell(idArmor, a.Name)+" "+arCol.Render(m.fnum(idArmorRating, a.ArmorRating))+"  "+banes)
+			" "+nameCell(idArmor, a.Name)+" "+arCol.Render(strconv.Itoa(a.ArmorRating))+"  "+banes)
 	}
 
 	lines = append(lines, "", sHdr.Render(" HELMET"))
@@ -518,15 +526,15 @@ func (m Model) viewGear() string {
 		lines = append(lines, " "+nameCell(idHelmet, ""))
 	} else {
 		banes := strings.Join([]string{
-			m.fbool(idHelmetAware, "Awareness", h.BaneAwareness),
-			m.fbool(idHelmetRanged, "Ranged Attacks", h.BaneRanged),
+			bane("Awareness", h.BaneAwareness),
+			bane("Ranged Attacks", h.BaneRanged),
 		}, "  ")
 		lines = append(lines, abHdr,
-			" "+nameCell(idHelmet, h.Name)+" "+arCol.Render(m.fnum(idHelmetRating, h.ArmorRating))+"  "+banes)
+			" "+nameCell(idHelmet, h.Name)+" "+arCol.Render(strconv.Itoa(h.ArmorRating))+"  "+banes)
 	}
 
 	lines = append(lines, "", sHdr.Render(" WEAPONS"),
-		sDim.Render(fmt.Sprintf(" %-16s %-4s %-8s %4s %3s  %s", "Name", "Grip", "Dmg", "Rng", "Dur", "Features")))
+		sDim.Render(fmt.Sprintf(" %-16s %-3s %-4s %4s %3s  %s", "Name", "Grp", "Dmg", "Rng", "Dur", "Features")))
 	for i := range 3 {
 		var w character.Item
 		if i < len(m.char.WeaponsAtHand) {
@@ -540,12 +548,12 @@ func (m Model) viewGear() string {
 		dmg := dash(w.Damage)
 		lines = append(lines, " "+nameCell(idWeaponAtHand(i), w.Name)+" "+
 			gripCol.Render(grip)+" "+dmgCol.Render(dmg)+" "+
-			rngCol.Render(m.fnum(idWeaponRange(i), w.Range)+"m")+" "+
+			rngCol.Render(strconv.Itoa(w.Range)+"m")+" "+
 			numCol.Render(m.fnum(idWeaponDur(i), w.Durability))+"  "+
 			strings.Join(w.Features, ", "))
 	}
 
-	lines = append(lines, sDim.Render(" enter edit · d doff → inventory · =/- adjust · space toggle bane"))
+	lines = append(lines, sDim.Render(" enter edit · d doff → inventory · =/- durability"))
 	return strings.Join(lines, "\n") + "\n"
 }
 
@@ -637,25 +645,20 @@ func (m Model) viewHeroicAbilities() string {
 
 	var lines []string
 	lines = append(lines, sHdr.Render(" HEROIC ABILITIES"))
-	lines = append(lines, sDim.Render(fmt.Sprintf(" %-*s %*s  %s", nameW, "Name", costW, "WP", "Requires")))
+	lines = append(lines, sDim.Render(fmt.Sprintf(" %-*s %*s", nameW, "Name", costW, "WP")))
 
 	// row renders one ability line. id is the field used for focus highlighting.
-	row := func(id fieldID, name string, cost int, reqs []string, met bool) {
+	// Requirements are shown only in the add/edit flow, not here.
+	row := func(id fieldID, name string, cost int) {
 		costStr := "—"
 		if cost > 0 {
 			costStr = strconv.Itoa(cost)
-		}
-		reqCell := character.RequirementLabel(reqs)
-		if !met {
-			// Flag an unmet requirement in place (red, with a "!") rather than with
-			// a left-margin marker, so ability names align with every other section.
-			reqCell = sWarn.Render("! " + reqCell)
 		}
 		nameCell := nameCol.Render(name)
 		if m.focused(id) {
 			nameCell = sSel.Render(nameCol.Render(name))
 		}
-		lines = append(lines, " "+nameCell+" "+costCol.Render(costStr)+"  "+reqCell)
+		lines = append(lines, " "+nameCell+" "+costCol.Render(costStr))
 	}
 
 	kin := character.KinAbilities(m.char.Kin)
@@ -663,14 +666,14 @@ func (m Model) viewHeroicAbilities() string {
 		switch e.id.family {
 		case famKinAbility:
 			a := kin[e.id.index]
-			row(e.id, a.Name, a.WPCost, nil, true)
+			row(e.id, a.Name, a.WPCost)
 		case famHab:
 			a := m.char.HeroicAbilities[e.id.index]
 			name := a.Name
 			if name == "" {
 				name = unnamed
 			}
-			row(e.id, name, a.WPCost, a.Requirements, character.RequirementMet(m.char, a))
+			row(e.id, name, a.WPCost)
 		default: // heroicOrder only yields kin/chosen ability ids
 		}
 	}
@@ -1132,10 +1135,19 @@ func pickWindow(sel, n, visible int) (start, end int) {
 }
 
 func (m Model) viewStatus() string {
-	line := " " + m.path
-	if m.status != "" {
-		line += "   " + m.status
+	var save string
+	switch m.saveState {
+	case savePending:
+		save = lipgloss.NewStyle().Foreground(colorHeader).Render("● saving…")
+	case saveFailed:
+		save = sWarn.Render("● save failed")
+		if m.saveErr != nil {
+			save += sWarn.Render(" (" + m.saveErr.Error() + ")")
+		}
+	case saveSaved:
+		save = lipgloss.NewStyle().Foreground(colorEdit).Render("● saved")
 	}
+	line := " " + m.path + "   " + save
 	hint := sDim.Render(" arrows navigate   =/- adjust numbers   enter edit/pick   space tick   q quit")
 	return line + "\n" + hint + "\n"
 }
@@ -1146,6 +1158,9 @@ func (m Model) ftext(id fieldID, raw string) string {
 	}
 	if m.editing {
 		return sEdit.Render(m.textInput.View())
+	}
+	if raw == "" {
+		raw = " " // keep the focus highlight visible on empty fields
 	}
 	return sSel.Render(raw)
 }

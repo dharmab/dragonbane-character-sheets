@@ -665,9 +665,21 @@ func Load(path string) (*Character, error) {
 }
 
 func Save(path string, c *Character) error {
-	data, err := json.MarshalIndent(c, "", "  ")
+	data, err := Marshal(c)
 	if err != nil {
 		return err
 	}
+	return WriteFile(path, data)
+}
+
+// Marshal renders a character to the on-disk JSON form. Splitting it from
+// WriteFile lets callers snapshot the bytes synchronously (avoiding races) and
+// perform the file write asynchronously.
+func Marshal(c *Character) ([]byte, error) {
+	return json.MarshalIndent(c, "", "  ")
+}
+
+// WriteFile writes already-marshaled character bytes to path.
+func WriteFile(path string, data []byte) error {
 	return os.WriteFile(path, data, 0o600)
 }

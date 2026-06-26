@@ -259,23 +259,43 @@ func TestItemModalSetsCategory(t *testing.T) {
 	}
 }
 
-func TestGearInlineStatEdits(t *testing.T) {
+// Durability changes during play, so it stays inline-editable in the gear table.
+func TestGearDurabilityInlineEdit(t *testing.T) {
+	t.Parallel()
+	m := newTestModel(t)
+	m.char.WeaponsAtHand[0] = character.Item{Name: "Axe", Weight: 1, Category: character.CatWeapon, Durability: 5}
+	m.rebuildFields()
+
+	focusID(t, &m, idWeaponDur(0))
+	m = send(m, "-")
+	if m.char.WeaponsAtHand[0].Durability != 4 {
+		t.Errorf("durability = %d; want 4", m.char.WeaponsAtHand[0].Durability)
+	}
+}
+
+// Armor rating doesn't change in play, so it is read-only in the gear table and
+// edited through the item modal instead.
+func TestGearStatsEditedViaModal(t *testing.T) {
 	t.Parallel()
 	m := newTestModel(t)
 	m.char.Armor = character.Item{Name: "Mail", Weight: 1, Category: character.CatArmor}
 	m.rebuildFields()
 
-	focusID(t, &m, idArmorRating)
-	m = send(m, "=")
-	m = send(m, "=")
-	if m.char.Armor.ArmorRating != 2 {
-		t.Errorf("armor rating = %d; want 2", m.char.Armor.ArmorRating)
+	focusID(t, &m, idArmor)
+	m = send(m, "enter") // open item modal on the armor slot
+	if !m.itemMode {
+		t.Fatal("expected item modal open on armor slot")
 	}
-
-	focusID(t, &m, idArmorSneak)
-	m = send(m, "space")
-	if !m.char.Armor.BaneSneaking {
-		t.Error("expected bane on sneaking toggled on")
+	m = send(m, "down") // Name -> Weight
+	m = send(m, "down") // Weight -> Category
+	m = send(m, "down") // Category -> Armor Rating
+	if m.itemActive != itemFieldRating {
+		t.Fatalf("active field = %d; want armor rating", m.itemActive)
+	}
+	m = send(m, "3")
+	m = send(m, "enter") // commit + close
+	if m.char.Armor.ArmorRating != 3 {
+		t.Errorf("armor rating = %d; want 3", m.char.Armor.ArmorRating)
 	}
 }
 
@@ -419,4 +439,86 @@ func TestAbilityRemoveRebuilds(t *testing.T) {
 	if len(m.char.HeroicAbilities) != 0 {
 		t.Errorf("ability should be removed, got %d", len(m.char.HeroicAbilities))
 	}
+}
+
+// A mutating key marks the save pending and emits a write command; running that
+// command and feeding the result back flips the state to saved and persists the
+// file.
+func TestAutoSavePendingThenSaved(t *testing.T) {
+	t.Parallel()
+	m := newTestModel(t)
+	focusID(t, &m, idCurrentHP)
+
+	next, cmd := m.Update(key("-"))
+	m = next.(Model)
+	if m.saveState != savePending {
+		t.Fatalf("saveState = %d; want pending", m.saveState)
+	}
+	if cmd == nil {
+		t.Fatal("expected a write command after a change")
+	}
+
+	msg := cmd() // run the (batched) write command(s) to get the save result
+	res := drainForSaveResult(t, msg)
+	next, _ = m.Update(res)
+	m = next.(Model)
+	if m.saveState != saveSaved {
+		t.Fatalf("saveState = %d; want saved", m.saveState)
+	}
+	if _, err := character.Load(m.path); err != nil {
+		t.Fatalf("character file not written: %v", err)
+	}
+}
+
+// Quitting while a write is in flight must defer the quit until the matching
+// result arrives.
+func TestQuitWaitsForPendingWrite(t *testing.T) {
+	t.Parallel()
+	m := newTestModel(t)
+	m.saveState = savePending
+	m.saveSeq = 1
+
+	next, cmd := m.Update(key("q"))
+	m = next.(Model)
+	if !m.quitting {
+		t.Fatal("expected quit to be deferred while a write is pending")
+	}
+	if isQuit(cmd) {
+		t.Fatal("must not quit while a write is pending")
+	}
+
+	_, cmd = m.Update(saveResultMsg{seq: 1})
+	if !isQuit(cmd) {
+		t.Fatal("expected quit once the pending write completed")
+	}
+}
+
+// drainForSaveResult runs a possibly-batched command message down to the
+// saveResultMsg it contains.
+func drainForSaveResult(t *testing.T, msg tea.Msg) saveResultMsg {
+	t.Helper()
+	switch v := msg.(type) {
+	case saveResultMsg:
+		return v
+	case tea.BatchMsg:
+		for _, c := range v {
+			if c == nil {
+				continue
+			}
+			if res, ok := c().(saveResultMsg); ok {
+				return res
+			}
+		}
+	}
+	t.Fatalf("no saveResultMsg in %T", msg)
+	return saveResultMsg{}
+}
+
+// isQuit reports whether running cmd yields tea's quit message.
+func isQuit(cmd tea.Cmd) bool {
+	if cmd == nil {
+		return false
+	}
+	_, ok := cmd().(tea.QuitMsg)
+	return ok
 }
