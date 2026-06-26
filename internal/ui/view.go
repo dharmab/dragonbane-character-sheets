@@ -485,7 +485,7 @@ func (m Model) viewGear() string {
 	arCol := lipgloss.NewStyle().Width(2).Align(lipgloss.Right)
 	gripCol := lipgloss.NewStyle().Width(3)
 	dmgCol := lipgloss.NewStyle().Width(4)
-	rngCol := lipgloss.NewStyle().Width(3).Align(lipgloss.Right)
+	rngCol := lipgloss.NewStyle().Width(4).Align(lipgloss.Right)
 	numCol := lipgloss.NewStyle().Width(3).Align(lipgloss.Right)
 
 	nameCell := func(id fieldID, name string) string {

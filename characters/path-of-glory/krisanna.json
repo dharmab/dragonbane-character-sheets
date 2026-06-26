@@ -1,0 +1,265 @@
+{
+  "name": "Krisanna the Bold",
+  "kin": "Halfling",
+  "profession": "Thief",
+  "age": "Young",
+  "attributes": {
+    "AGL": 18,
+    "CHA": 10,
+    "CON": 13,
+    "INT": 14,
+    "STR": 8,
+    "WIL": 13
+  },
+  "current_hp": 13,
+  "current_wp": 10,
+  "conditions": {
+    "exhausted": false,
+    "sickly": false,
+    "dazed": false,
+    "angry": false,
+    "scared": false,
+    "disheartened": false
+  },
+  "round_rest_used": false,
+  "stretch_rest_used": false,
+  "skills": [
+    {
+      "name": "Acrobatics",
+      "level": 14,
+      "advanced": false
+    },
+    {
+      "name": "Awareness",
+      "level": 12,
+      "advanced": false
+    },
+    {
+      "name": "Bartering",
+      "level": 5,
+      "advanced": false
+    },
+    {
+      "name": "Beast Lore",
+      "level": 6,
+      "advanced": false
+    },
+    {
+      "name": "Bluffing",
+      "level": 10,
+      "advanced": false
+    },
+    {
+      "name": "Bushcraft",
+      "level": 6,
+      "advanced": false
+    },
+    {
+      "name": "Crafting",
+      "level": 4,
+      "advanced": false
+    },
+    {
+      "name": "Evade",
+      "level": 14,
+      "advanced": false
+    },
+    {
+      "name": "Healing",
+      "level": 6,
+      "advanced": false
+    },
+    {
+      "name": "Hunting \u0026 Fishing",
+      "level": 7,
+      "advanced": false
+    },
+    {
+      "name": "Languages",
+      "level": 6,
+      "advanced": false
+    },
+    {
+      "name": "Myths \u0026 Legends",
+      "level": 6,
+      "advanced": false
+    },
+    {
+      "name": "Performance",
+      "level": 5,
+      "advanced": false
+    },
+    {
+      "name": "Persuasion",
+      "level": 5,
+      "advanced": false
+    },
+    {
+      "name": "Riding",
+      "level": 7,
+      "advanced": false
+    },
+    {
+      "name": "Seamanship",
+      "level": 6,
+      "advanced": false
+    },
+    {
+      "name": "Sleight of Hand",
+      "level": 14,
+      "advanced": false
+    },
+    {
+      "name": "Sneaking",
+      "level": 14,
+      "advanced": false
+    },
+    {
+      "name": "Spot Hidden",
+      "level": 12,
+      "advanced": false
+    },
+    {
+      "name": "Swimming",
+      "level": 7,
+      "advanced": false
+    },
+    {
+      "name": "Axes",
+      "level": 4,
+      "advanced": false
+    },
+    {
+      "name": "Bows",
+      "level": 7,
+      "advanced": false
+    },
+    {
+      "name": "Brawling",
+      "level": 4,
+      "advanced": false
+    },
+    {
+      "name": "Crossbows",
+      "level": 7,
+      "advanced": false
+    },
+    {
+      "name": "Hammers",
+      "level": 4,
+      "advanced": false
+    },
+    {
+      "name": "Knives",
+      "level": 14,
+      "advanced": false
+    },
+    {
+      "name": "Slings",
+      "level": 7,
+      "advanced": false
+    },
+    {
+      "name": "Spears",
+      "level": 4,
+      "advanced": false
+    },
+    {
+      "name": "Staves",
+      "level": 7,
+      "advanced": false
+    },
+    {
+      "name": "Swords",
+      "level": 4,
+      "advanced": false
+    }
+  ],
+  "weakness": {
+    "name": "Reckless",
+    "description": "You always take big risks without thought of the consequences."
+  },
+  "armor": {
+    "name": "Leather Armor",
+    "weight": 1,
+    "category": "armor",
+    "armor_rating": 1
+  },
+  "helmet": {
+    "name": "",
+    "weight": 0
+  },
+  "weapons_at_hand": [
+    {
+      "name": "Dagger",
+      "weight": 1,
+      "category": "weapon",
+      "grip": "1H",
+      "range": 2,
+      "damage": "D8",
+      "durability": 9,
+      "features": [
+        "Subtle",
+        "Piercing",
+        "Slashing"
+      ]
+    },
+    {
+      "name": "Knife",
+      "weight": 1,
+      "category": "weapon",
+      "grip": "1H",
+      "range": 2,
+      "damage": "d8",
+      "durability": 6,
+      "features": [
+        "Subtle",
+        "Piercing"
+      ]
+    },
+    {
+      "name": "Knife",
+      "weight": 1,
+      "category": "weapon",
+      "grip": "1H",
+      "range": 2,
+      "damage": "d8",
+      "durability": 6,
+      "features": [
+        "Subtle",
+        "Piercing"
+      ]
+    }
+  ],
+  "inventory": [
+    {
+      "name": "Lockpicks",
+      "weight": 1
+    },
+    {
+      "name": "Torch",
+      "weight": 1
+    },
+    {
+      "name": "Rope",
+      "weight": 1
+    }
+  ],
+  "tiny_items": [
+    "Flint \u0026 Tinder",
+    "Treasure map"
+  ],
+  "heroic_abilities": [
+    {
+      "name": "Backstabbing",
+      "wp_cost": 3,
+      "description": "Make a melee attack against an enemy within 2m of another player character as a sneak attack: it cannot be dodged or parried, you get a boon, and roll an extra die for damage. Subtle weapons only; not an action.",
+      "requirements": [
+        "Knives"
+      ]
+    }
+  ],
+  "magic_skills": [],
+  "grimoire": [],
+  "magic_tricks": []
+}

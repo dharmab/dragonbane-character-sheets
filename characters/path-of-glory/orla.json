@@ -1,0 +1,254 @@
+{
+  "name": "Orla Moonsilver",
+  "kin": "Elf",
+  "profession": "Hunter",
+  "age": "Adult",
+  "attributes": {
+    "AGL": 17,
+    "CHA": 9,
+    "CON": 15,
+    "INT": 13,
+    "STR": 13,
+    "WIL": 10
+  },
+  "current_hp": 15,
+  "current_wp": 10,
+  "conditions": {
+    "exhausted": false,
+    "sickly": false,
+    "dazed": false,
+    "angry": false,
+    "scared": false,
+    "disheartened": false
+  },
+  "round_rest_used": false,
+  "stretch_rest_used": false,
+  "skills": [
+    {
+      "name": "Acrobatics",
+      "level": 14,
+      "advanced": false
+    },
+    {
+      "name": "Awareness",
+      "level": 12,
+      "advanced": false
+    },
+    {
+      "name": "Bartering",
+      "level": 5,
+      "advanced": false
+    },
+    {
+      "name": "Beast Lore",
+      "level": 6,
+      "advanced": false
+    },
+    {
+      "name": "Bluffing",
+      "level": 5,
+      "advanced": false
+    },
+    {
+      "name": "Bushcraft",
+      "level": 12,
+      "advanced": false
+    },
+    {
+      "name": "Crafting",
+      "level": 6,
+      "advanced": false
+    },
+    {
+      "name": "Evade",
+      "level": 14,
+      "advanced": false
+    },
+    {
+      "name": "Healing",
+      "level": 6,
+      "advanced": false
+    },
+    {
+      "name": "Hunting \u0026 Fishing",
+      "level": 14,
+      "advanced": false
+    },
+    {
+      "name": "Languages",
+      "level": 6,
+      "advanced": false
+    },
+    {
+      "name": "Myths \u0026 Legends",
+      "level": 6,
+      "advanced": false
+    },
+    {
+      "name": "Performance",
+      "level": 5,
+      "advanced": false
+    },
+    {
+      "name": "Persuasion",
+      "level": 5,
+      "advanced": false
+    },
+    {
+      "name": "Riding",
+      "level": 7,
+      "advanced": false
+    },
+    {
+      "name": "Seamanship",
+      "level": 6,
+      "advanced": false
+    },
+    {
+      "name": "Sleight of Hand",
+      "level": 7,
+      "advanced": false
+    },
+    {
+      "name": "Sneaking",
+      "level": 14,
+      "advanced": false
+    },
+    {
+      "name": "Spot Hidden",
+      "level": 6,
+      "advanced": false
+    },
+    {
+      "name": "Swimming",
+      "level": 14,
+      "advanced": false
+    },
+    {
+      "name": "Axes",
+      "level": 6,
+      "advanced": false
+    },
+    {
+      "name": "Bows",
+      "level": 14,
+      "advanced": false
+    },
+    {
+      "name": "Brawling",
+      "level": 6,
+      "advanced": false
+    },
+    {
+      "name": "Crossbows",
+      "level": 7,
+      "advanced": false
+    },
+    {
+      "name": "Hammers",
+      "level": 6,
+      "advanced": false
+    },
+    {
+      "name": "Knives",
+      "level": 14,
+      "advanced": false
+    },
+    {
+      "name": "Slings",
+      "level": 7,
+      "advanced": false
+    },
+    {
+      "name": "Spears",
+      "level": 6,
+      "advanced": false
+    },
+    {
+      "name": "Staves",
+      "level": 7,
+      "advanced": false
+    },
+    {
+      "name": "Swords",
+      "level": 12,
+      "advanced": false
+    }
+  ],
+  "weakness": {
+    "name": "Bigoted",
+    "description": "Nightkin such as orcs and goblins are evil and need to be fought."
+  },
+  "armor": {
+    "name": "Leather Armor",
+    "weight": 1,
+    "category": "armor",
+    "armor_rating": 1
+  },
+  "helmet": {
+    "name": "",
+    "weight": 1
+  },
+  "weapons_at_hand": [
+    {
+      "name": "Longbow",
+      "weight": 1,
+      "category": "weapon",
+      "grip": "2H",
+      "range": 100,
+      "damage": "d12",
+      "durability": 6,
+      "features": [
+        "Piercing"
+      ]
+    },
+    {
+      "name": "Knife",
+      "weight": 1,
+      "category": "weapon",
+      "grip": "1H",
+      "range": 2,
+      "damage": "d8",
+      "durability": 3,
+      "features": [
+        "Subtle",
+        "Piercing"
+      ]
+    },
+    {
+      "name": "",
+      "weight": 1
+    }
+  ],
+  "inventory": [
+    {
+      "name": "Quiver",
+      "weight": 1
+    },
+    {
+      "name": "Torch",
+      "weight": 1
+    },
+    {
+      "name": "Rope",
+      "weight": 1
+    }
+  ],
+  "tiny_items": [
+    "Flint \u0026 Tinder",
+    "Troll Fang"
+  ],
+  "heroic_abilities": [
+    {
+      "name": "Twin Shot",
+      "wp_cost": 3,
+      "description": "When attacking with a bow (not crossbow), shoot two arrows. Roll once to hit at a bane; damage is rolled separately, at one or two targets.",
+      "requirements": [
+        "Bows"
+      ]
+    }
+  ],
+  "magic_skills": [],
+  "grimoire": [],
+  "magic_tricks": []
+}
