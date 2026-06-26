@@ -1167,6 +1167,9 @@ func (m Model) ftext(id fieldID, raw string) string {
 
 func (m Model) fenum(id fieldID, raw string) string {
 	if m.focused(id) {
+		if m.professionEdit {
+			return sEdit.Render(m.textInput.View())
+		}
 		return sSel.Render(raw)
 	}
 	return raw

@@ -224,8 +224,9 @@ type Model struct {
 	grid     [][]int         // grid[row][col] = index into fields; mirrors visualLayout
 	fieldIdx map[fieldID]int // id → index into fields, for O(1) fieldIndex lookups
 
-	editing   bool
-	textInput textinput.Model
+	editing        bool
+	professionEdit bool // inline text edit of a custom profession name
+	textInput      textinput.Model
 
 	picking         bool
 	pickOptions     []string
@@ -787,6 +788,21 @@ func (m Model) enumOptions() (options []string, current int) {
 		return nil, 0
 	}
 	cur := ef.get(m.char)
+
+	// The profession picker offers a Custom… entry first; selecting it opens an
+	// inline text editor for a free-form name. A stored value that is not a builtin
+	// is a custom profession, so the cursor lands on the Custom entry.
+	if m.currentField().id.family == famProfession {
+		opts := append([]string{customLabel}, ef.options...)
+		current = 0 // Custom… by default (covers empty and custom values)
+		for i, opt := range ef.options {
+			if opt == cur {
+				current = i + 1
+			}
+		}
+		return opts, current
+	}
+
 	for i, opt := range ef.options {
 		if opt == cur {
 			current = i

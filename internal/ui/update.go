@@ -452,7 +452,7 @@ func (m Model) handlePickerKey(key string) (tea.Model, tea.Cmd) {
 		m.picking = false
 		m.autoSave()
 		// Picking customLabel opens an edit modal; start its cursor blinking.
-		if m.abilityMode || m.spellMode || m.trickMode {
+		if m.abilityMode || m.spellMode || m.trickMode || m.professionEdit {
 			return m, textinput.Blink
 		}
 	}
@@ -495,6 +495,12 @@ func (m *Model) textFieldValue() string {
 }
 
 func (m *Model) commitText() {
+	if m.professionEdit {
+		m.char.Profession = model.Profession(m.textInput.Value())
+		m.professionEdit = false
+		m.autoSave()
+		return
+	}
 	if p := m.textFieldTarget(); p != nil {
 		*p = m.textInput.Value()
 	}
@@ -530,9 +536,30 @@ func (m *Model) applyPickerSelection() {
 		return
 	}
 	chosen := m.pickOptions[m.pickSelected]
-	if ef, ok := enumFieldFor(m.currentField().id.family); ok {
+	fam := m.currentField().id.family
+	if fam == famProfession && chosen == customLabel {
+		m.startProfessionEdit()
+		return
+	}
+	if ef, ok := enumFieldFor(fam); ok {
 		ef.set(m.char, chosen)
 	}
+}
+
+// startProfessionEdit opens the inline text editor for a free-form profession name.
+// It seeds the input with the current value only when that value is custom (not a
+// builtin), so reselecting Custom… on a builtin profession starts blank.
+func (m *Model) startProfessionEdit() {
+	m.editing = true
+	m.professionEdit = true
+	seed := ""
+	if !slices.Contains(toStrings(model.AllProfessions), string(m.char.Profession)) {
+		seed = string(m.char.Profession)
+	}
+	m.textInput.Focus()
+	m.textInput.SetValue(seed)
+	m.textInput.CursorEnd()
+	m.textInput.SetWidth(textInputWidth)
 }
 
 // autoEquipSlot returns the pickSelected slot index an item of the given category
