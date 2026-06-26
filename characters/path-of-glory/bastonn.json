@@ -1,0 +1,256 @@
+{
+  "name": "Bastonn Bloodjaw",
+  "kin": "Wolfkin",
+  "profession": "Fighter",
+  "age": "Young",
+  "attributes": {
+    "AGL": 14,
+    "CHA": 7,
+    "CON": 17,
+    "INT": 11,
+    "STR": 18,
+    "WIL": 13
+  },
+  "current_hp": 17,
+  "current_wp": 13,
+  "conditions": {
+    "exhausted": false,
+    "sickly": false,
+    "dazed": false,
+    "angry": false,
+    "scared": false,
+    "disheartened": false
+  },
+  "round_rest_used": false,
+  "stretch_rest_used": false,
+  "skills": [
+    {
+      "name": "Acrobatics",
+      "level": 12,
+      "advanced": false
+    },
+    {
+      "name": "Awareness",
+      "level": 5,
+      "advanced": false
+    },
+    {
+      "name": "Bartering",
+      "level": 4,
+      "advanced": false
+    },
+    {
+      "name": "Beast Lore",
+      "level": 5,
+      "advanced": false
+    },
+    {
+      "name": "Bluffing",
+      "level": 4,
+      "advanced": false
+    },
+    {
+      "name": "Bushcraft",
+      "level": 5,
+      "advanced": false
+    },
+    {
+      "name": "Crafting",
+      "level": 7,
+      "advanced": false
+    },
+    {
+      "name": "Evade",
+      "level": 12,
+      "advanced": false
+    },
+    {
+      "name": "Healing",
+      "level": 5,
+      "advanced": false
+    },
+    {
+      "name": "Hunting \u0026 Fishing",
+      "level": 6,
+      "advanced": false
+    },
+    {
+      "name": "Languages",
+      "level": 5,
+      "advanced": false
+    },
+    {
+      "name": "Myths \u0026 Legends",
+      "level": 5,
+      "advanced": false
+    },
+    {
+      "name": "Performance",
+      "level": 4,
+      "advanced": false
+    },
+    {
+      "name": "Persuasion",
+      "level": 4,
+      "advanced": false
+    },
+    {
+      "name": "Riding",
+      "level": 6,
+      "advanced": false
+    },
+    {
+      "name": "Seamanship",
+      "level": 5,
+      "advanced": false
+    },
+    {
+      "name": "Sleight of Hand",
+      "level": 6,
+      "advanced": false
+    },
+    {
+      "name": "Sneaking",
+      "level": 12,
+      "advanced": false
+    },
+    {
+      "name": "Spot Hidden",
+      "level": 5,
+      "advanced": false
+    },
+    {
+      "name": "Swimming",
+      "level": 6,
+      "advanced": false
+    },
+    {
+      "name": "Axes",
+      "level": 14,
+      "advanced": false
+    },
+    {
+      "name": "Bows",
+      "level": 6,
+      "advanced": false
+    },
+    {
+      "name": "Brawling",
+      "level": 14,
+      "advanced": false
+    },
+    {
+      "name": "Crossbows",
+      "level": 6,
+      "advanced": false
+    },
+    {
+      "name": "Hammers",
+      "level": 14,
+      "advanced": false
+    },
+    {
+      "name": "Knives",
+      "level": 6,
+      "advanced": false
+    },
+    {
+      "name": "Slings",
+      "level": 6,
+      "advanced": false
+    },
+    {
+      "name": "Spears",
+      "level": 14,
+      "advanced": false
+    },
+    {
+      "name": "Staves",
+      "level": 6,
+      "advanced": false
+    },
+    {
+      "name": "Swords",
+      "level": 14,
+      "advanced": false
+    }
+  ],
+  "weakness": {
+    "name": "Gluttonous",
+    "description": "You take every chance to eat something tasty."
+  },
+  "armor": {
+    "name": "Studded Leather",
+    "weight": 1,
+    "category": "armor",
+    "armor_rating": 2,
+    "bane_sneaking": true
+  },
+  "helmet": {
+    "name": "",
+    "weight": 1
+  },
+  "weapons_at_hand": [
+    {
+      "name": "Long Spear",
+      "weight": 1,
+      "category": "weapon",
+      "grip": "2H",
+      "range": 4,
+      "damage": "2d8",
+      "durability": 9,
+      "features": [
+        "Long",
+        "Piercing"
+      ]
+    },
+    {
+      "name": "Short Spear",
+      "weight": 1,
+      "category": "weapon",
+      "grip": "1H",
+      "range": 36,
+      "damage": "d10",
+      "durability": 9,
+      "features": [
+        "Piercing"
+      ]
+    },
+    {
+      "name": "",
+      "weight": 1
+    }
+  ],
+  "inventory": [
+    {
+      "name": "Torch",
+      "weight": 1
+    }
+  ],
+  "tiny_items": [
+    "Flint \u0026 Tinger",
+    "Blue bottle of perfume"
+  ],
+  "heroic_abilities": [
+    {
+      "name": "Veteran",
+      "wp_cost": 1,
+      "description": "Activate at the start of a combat round to keep your initiative card from the previous round instead of drawing a new one. Not an action.",
+      "requirements": [
+        "Axes",
+        "Bows",
+        "Brawling",
+        "Crossbows",
+        "Hammers",
+        "Knives",
+        "Slings",
+        "Spears",
+        "Staves",
+        "Swords"
+      ]
+    }
+  ],
+  "magic_skills": [],
+  "grimoire": [],
+  "magic_tricks": []
+}

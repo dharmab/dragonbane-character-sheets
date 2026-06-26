@@ -639,7 +639,7 @@ func (m Model) viewTinyItems() string {
 }
 
 func (m Model) viewHeroicAbilities() string {
-	const nameW, costW = 16, 2
+	const nameW, costW = 24, 2
 	nameCol := lipgloss.NewStyle().Width(nameW)
 	costCol := lipgloss.NewStyle().Width(costW).Align(lipgloss.Right)
 
