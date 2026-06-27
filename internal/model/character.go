@@ -100,6 +100,9 @@ func NewCharacter() *Character {
 	}
 	skills := make([]Skill, len(CoreSkills))
 	copy(skills, CoreSkills)
+	for i := range skills {
+		skills[i].Level = UntrainedSkillLevel
+	}
 	return &Character{
 		Name:            "",
 		Kin:             Human,

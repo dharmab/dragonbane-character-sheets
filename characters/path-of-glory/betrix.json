@@ -1,0 +1,244 @@
+{
+  "name": "Captain Betrix Farsail",
+  "kin": "Human",
+  "profession": "Mariner",
+  "age": "Adult",
+  "attributes": {
+    "AGL": 15,
+    "CHA": 11,
+    "CON": 12,
+    "INT": 12,
+    "STR": 14,
+    "WIL": 16
+  },
+  "current_hp": 12,
+  "current_wp": 16,
+  "conditions": {
+    "exhausted": false,
+    "sickly": false,
+    "dazed": false,
+    "angry": false,
+    "scared": false,
+    "disheartened": false
+  },
+  "round_rest_used": false,
+  "stretch_rest_used": false,
+  "skills": [
+    {
+      "name": "Acrobatics",
+      "level": 12,
+      "advanced": false
+    },
+    {
+      "name": "Awareness",
+      "level": 10,
+      "advanced": false
+    },
+    {
+      "name": "Bartering",
+      "level": 5,
+      "advanced": false
+    },
+    {
+      "name": "Beast Lore",
+      "level": 5,
+      "advanced": false
+    },
+    {
+      "name": "Bluffing",
+      "level": 5,
+      "advanced": false
+    },
+    {
+      "name": "Bushcraft",
+      "level": 5,
+      "advanced": false
+    },
+    {
+      "name": "Crafting",
+      "level": 12,
+      "advanced": false
+    },
+    {
+      "name": "Evade",
+      "level": 12,
+      "advanced": false
+    },
+    {
+      "name": "Healing",
+      "level": 5,
+      "advanced": false
+    },
+    {
+      "name": "Hunting \u0026 Fishing",
+      "level": 6,
+      "advanced": false
+    },
+    {
+      "name": "Languages",
+      "level": 10,
+      "advanced": false
+    },
+    {
+      "name": "Myths \u0026 Legends",
+      "level": 5,
+      "advanced": false
+    },
+    {
+      "name": "Performance",
+      "level": 5,
+      "advanced": false
+    },
+    {
+      "name": "Persuasion",
+      "level": 5,
+      "advanced": false
+    },
+    {
+      "name": "Riding",
+      "level": 6,
+      "advanced": false
+    },
+    {
+      "name": "Seamanship",
+      "level": 10,
+      "advanced": false
+    },
+    {
+      "name": "Sleight of Hand",
+      "level": 12,
+      "advanced": false
+    },
+    {
+      "name": "Sneaking",
+      "level": 6,
+      "advanced": false
+    },
+    {
+      "name": "Spot Hidden",
+      "level": 10,
+      "advanced": false
+    },
+    {
+      "name": "Swimming",
+      "level": 12,
+      "advanced": false
+    },
+    {
+      "name": "Axes",
+      "level": 6,
+      "advanced": false
+    },
+    {
+      "name": "Bows",
+      "level": 6,
+      "advanced": false
+    },
+    {
+      "name": "Brawling",
+      "level": 6,
+      "advanced": false
+    },
+    {
+      "name": "Crossbows",
+      "level": 6,
+      "advanced": false
+    },
+    {
+      "name": "Hammers",
+      "level": 6,
+      "advanced": false
+    },
+    {
+      "name": "Knives",
+      "level": 6,
+      "advanced": false
+    },
+    {
+      "name": "Slings",
+      "level": 6,
+      "advanced": false
+    },
+    {
+      "name": "Spears",
+      "level": 6,
+      "advanced": false
+    },
+    {
+      "name": "Staves",
+      "level": 6,
+      "advanced": false
+    },
+    {
+      "name": "Swords",
+      "level": 12,
+      "advanced": false
+    }
+  ],
+  "weakness": {
+    "name": "Overbearing",
+    "description": "You always tell others what to do."
+  },
+  "armor": {
+    "name": "",
+    "weight": 1,
+    "category": "armor"
+  },
+  "helmet": {
+    "name": "",
+    "weight": 1
+  },
+  "weapons_at_hand": [
+    {
+      "name": "Scimitar",
+      "weight": 1,
+      "category": "weapon",
+      "grip": "1H",
+      "range": 2,
+      "damage": "2d6",
+      "durability": 12,
+      "features": [
+        "Slashing"
+      ]
+    },
+    {
+      "name": "",
+      "weight": 1
+    },
+    {
+      "name": "",
+      "weight": 1
+    }
+  ],
+  "inventory": [
+    {
+      "name": "Rope",
+      "weight": 1
+    },
+    {
+      "name": "Grappling Hook",
+      "weight": 1
+    },
+    {
+      "name": "Spyglass",
+      "weight": 1
+    }
+  ],
+  "tiny_items": [
+    "Flint \u0026 Tinder",
+    "Drawing of a ship"
+  ],
+  "heroic_abilities": [
+    {
+      "name": "Sea Legs",
+      "wp_cost": 1,
+      "description": "Activate (not an action) when performing an action in water, even waist deep: you are safe from all negative effects of being in water for one round, including drowning.",
+      "requirements": [
+        "Swimming"
+      ]
+    }
+  ],
+  "magic_skills": [],
+  "grimoire": [],
+  "magic_tricks": []
+}

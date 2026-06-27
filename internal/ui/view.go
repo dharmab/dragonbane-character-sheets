@@ -590,10 +590,10 @@ func (m Model) viewInventory() string {
 	maxSlots := model.InventorySlots(str)
 	used := model.UsedInventorySlots(m.char.Inventory)
 
-	slotInfo := fmt.Sprintf("%d/%d slots", used, maxSlots)
+	slotInfo := fmt.Sprintf("%d/%d", used, maxSlots)
 	if used > maxSlots {
 		slotInfo = lipgloss.NewStyle().Bold(true).Foreground(colorWarn).Render(
-			fmt.Sprintf("%d/%d slots (OVER)", used, maxSlots))
+			fmt.Sprintf("%d/%d (OVER-ENCUMBERED)", used, maxSlots))
 	}
 
 	var lines []string

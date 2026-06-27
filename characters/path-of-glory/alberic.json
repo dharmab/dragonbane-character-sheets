@@ -1,0 +1,245 @@
+{
+  "name": "Alberic Gleamheart",
+  "kin": "Dwarf",
+  "profession": "Merchant",
+  "age": "Young",
+  "attributes": {
+    "AGL": 13,
+    "CHA": 17,
+    "CON": 14,
+    "INT": 14,
+    "STR": 10,
+    "WIL": 11
+  },
+  "current_hp": 14,
+  "current_wp": 11,
+  "conditions": {
+    "exhausted": false,
+    "sickly": false,
+    "dazed": false,
+    "angry": false,
+    "scared": false,
+    "disheartened": false
+  },
+  "round_rest_used": false,
+  "stretch_rest_used": false,
+  "skills": [
+    {
+      "name": "Acrobatics",
+      "level": 6,
+      "advanced": false
+    },
+    {
+      "name": "Awareness",
+      "level": 12,
+      "advanced": false
+    },
+    {
+      "name": "Bartering",
+      "level": 14,
+      "advanced": false
+    },
+    {
+      "name": "Beast Lore",
+      "level": 6,
+      "advanced": false
+    },
+    {
+      "name": "Bluffing",
+      "level": 14,
+      "advanced": false
+    },
+    {
+      "name": "Bushcraft",
+      "level": 6,
+      "advanced": false
+    },
+    {
+      "name": "Crafting",
+      "level": 5,
+      "advanced": false
+    },
+    {
+      "name": "Evade",
+      "level": 6,
+      "advanced": false
+    },
+    {
+      "name": "Healing",
+      "level": 6,
+      "advanced": false
+    },
+    {
+      "name": "Hunting \u0026 Fishing",
+      "level": 6,
+      "advanced": false
+    },
+    {
+      "name": "Languages",
+      "level": 5,
+      "advanced": false
+    },
+    {
+      "name": "Myths \u0026 Legends",
+      "level": 12,
+      "advanced": false
+    },
+    {
+      "name": "Performance",
+      "level": 7,
+      "advanced": false
+    },
+    {
+      "name": "Persuasion",
+      "level": 14,
+      "advanced": false
+    },
+    {
+      "name": "Riding",
+      "level": 6,
+      "advanced": false
+    },
+    {
+      "name": "Seamanship",
+      "level": 6,
+      "advanced": false
+    },
+    {
+      "name": "Sleight of Hand",
+      "level": 6,
+      "advanced": false
+    },
+    {
+      "name": "Sneaking",
+      "level": 12,
+      "advanced": false
+    },
+    {
+      "name": "Spot Hidden",
+      "level": 12,
+      "advanced": false
+    },
+    {
+      "name": "Swimming",
+      "level": 6,
+      "advanced": false
+    },
+    {
+      "name": "Axes",
+      "level": 5,
+      "advanced": false
+    },
+    {
+      "name": "Bows",
+      "level": 6,
+      "advanced": false
+    },
+    {
+      "name": "Brawling",
+      "level": 5,
+      "advanced": false
+    },
+    {
+      "name": "Crossbows",
+      "level": 6,
+      "advanced": false
+    },
+    {
+      "name": "Hammers",
+      "level": 5,
+      "advanced": false
+    },
+    {
+      "name": "Knives",
+      "level": 12,
+      "advanced": false
+    },
+    {
+      "name": "Slings",
+      "level": 6,
+      "advanced": false
+    },
+    {
+      "name": "Spears",
+      "level": 5,
+      "advanced": false
+    },
+    {
+      "name": "Staves",
+      "level": 6,
+      "advanced": false
+    },
+    {
+      "name": "Swords",
+      "level": 5,
+      "advanced": false
+    }
+  ],
+  "weakness": {
+    "name": "Vain",
+    "description": "You'll help anyone who gives you praise or a compliment."
+  },
+  "armor": {
+    "name": "",
+    "weight": 0
+  },
+  "helmet": {
+    "name": "",
+    "weight": 0
+  },
+  "weapons_at_hand": [
+    {
+      "name": "Dagger",
+      "weight": 1,
+      "category": "weapon",
+      "grip": "1H",
+      "range": 8,
+      "damage": "d8",
+      "durability": 9,
+      "features": [
+        "Subtle",
+        "Piercing",
+        "Slashing"
+      ]
+    },
+    {
+      "name": "",
+      "weight": 0
+    },
+    {
+      "name": "",
+      "weight": 0
+    }
+  ],
+  "inventory": [
+    {
+      "name": "Rope",
+      "weight": 1
+    },
+    {
+      "name": "Lantern",
+      "weight": 1
+    },
+    {
+      "name": "Lamp Oil",
+      "weight": 1
+    }
+  ],
+  "tiny_items": [
+    "Flint \u0026 Tinder",
+    "Gold Amulet"
+  ],
+  "heroic_abilities": [
+    {
+      "name": "Treasure Hunter",
+      "wp_cost": 3,
+      "description": "At a crossroads of some kind, activate this ability to learn the direction of the greatest treasures.",
+      "requirements": [
+        "Bartering"
+      ]
+    }
+  ],
+  "magic_skills": [],
+  "grimoire": [],
+  "magic_tricks": []
+}

@@ -198,6 +198,9 @@ func (m Model) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 			}
 		case keyEnter:
 			if slot != nil {
+				if slot.Category == model.ItemCategoryGeneric {
+					slot.Category = gearSlotCategory(f.id.family)
+				}
 				m.startItemEdit(slot)
 				return m, textinput.Blink
 			}
@@ -768,6 +771,20 @@ func (m *Model) gearSlotPtr(id fieldID) *model.Item {
 	default: // not a gear field
 	}
 	return nil
+}
+
+// gearSlotCategory maps a gear slot's field family to the item category that slot
+// holds, so the item modal can preselect it (mirrors the equip-time auto-tagging).
+func gearSlotCategory(fam fieldFamily) model.ItemCategory {
+	switch fam {
+	case famArmor:
+		return model.ItemCategoryArmor
+	case famHelmet:
+		return model.ItemCategoryHelmet
+	case famWeaponAtHand, famWeaponDur:
+		return model.ItemCategoryWeapon
+	}
+	return model.ItemCategoryGeneric
 }
 
 // clampFocus keeps the focus index valid after the field list shrinks.
