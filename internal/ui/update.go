@@ -729,7 +729,7 @@ type saveResultMsg struct {
 // flag into a single write command per key press; the actual file write happens
 // off the main loop, so the status bar can show "pending" until it completes.
 func (m *Model) autoSave() {
-	data, err := model.Marshal(m.char)
+	data, err := m.char.Marshal()
 	if err != nil {
 		m.saveState = saveFailed
 		m.saveErr = err
@@ -816,7 +816,7 @@ func (m *Model) openAbilityPicker() {
 		ap := abilityPick{
 			name:       h.Name,
 			display:    display,
-			selectable: model.RequirementMet(m.char, h),
+			selectable: m.char.MeetsHeroicAbilityRequirements(h),
 		}
 		if ap.selectable {
 			met = append(met, ap)
@@ -1250,13 +1250,13 @@ func (m *Model) openAddMagicPicker() {
 		if m.char.KnowsSpell(sp.Name) {
 			continue
 		}
-		add(namePick{name: sp.Name, display: sp.Name, selectable: model.IsSpellAvailable(m.char, sp)})
+		add(namePick{name: sp.Name, display: sp.Name, selectable: m.char.MeetsSpellRequirements(sp)})
 	}
 	for _, tr := range model.CoreMagicTricks {
 		if m.char.KnowsMagicTrick(tr.Name) {
 			continue
 		}
-		add(namePick{name: tr.Name, display: tr.Name, trick: true, selectable: model.IsMagicTrickAvailable(m.char, tr)})
+		add(namePick{name: tr.Name, display: tr.Name, trick: true, selectable: m.char.MeetsMagicTrickRequirements(tr)})
 	}
 	byName := func(a, b namePick) int { return strings.Compare(a.display, b.display) }
 	slices.SortFunc(avail, byName)

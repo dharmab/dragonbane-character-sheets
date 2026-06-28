@@ -13,8 +13,8 @@ import (
 func main() {
 	rootCmd := &cobra.Command{
 		Use:   "dragonbane-char <character.json>",
-		Short: "A terminal character sheet for Dragonbane",
-		Long:  "A terminal character sheet for Dragonbane.\n\nThe character file is loaded if it exists, or created from a blank sheet if it does not. Changes are saved automatically.",
+		Short: "TUI character sheet for Dragonbane",
+		Long:  "A character sheet for Dragonbane.\n\nThe character file is loaded if it exists, or created from a blank sheet if it does not. Changes are saved automatically.",
 		Args:  cobra.ExactArgs(1),
 		ValidArgsFunction: func(_ *cobra.Command, args []string, _ string) ([]string, cobra.ShellCompDirective) {
 			if len(args) != 0 {

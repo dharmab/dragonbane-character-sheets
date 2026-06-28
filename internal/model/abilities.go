@@ -1,5 +1,74 @@
 package model
 
+import (
+	"strconv"
+	"strings"
+)
+
+func AbilityHPBonus(abilities []HeroicAbility) int {
+	total := 0
+	for _, ability := range abilities {
+		_, quantity := ParseQuantity(ability.Name)
+		total += ability.HPBonus * quantity
+	}
+	return total
+}
+
+func AbilityWPBonus(abilities []HeroicAbility) int {
+	total := 0
+	for _, ability := range abilities {
+		_, quantity := ParseQuantity(ability.Name)
+		total += ability.WPBonus * quantity
+	}
+	return total
+}
+
+const HeroicRequirementLevel = 12
+
+func RequirementLabel(reqs []string) string {
+	if len(reqs) == 0 {
+		return ""
+	}
+	var skills string
+	switch {
+	case sameSkills(reqs, weaponSkills):
+		skills = "Any weapon skill"
+	case sameSkills(reqs, meleeWeaponSkills):
+		skills = "Any melee weapon skill"
+	case sameSkills(reqs, strengthMeleeWeaponSkills):
+		skills = "Any STR-based melee weapon skill"
+	default:
+		skills = strings.Join(reqs, " or ")
+	}
+	return skills + " " + strconv.Itoa(HeroicRequirementLevel)
+}
+
+func sameSkills(a, b []string) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := range a {
+		if a[i] != b[i] {
+			return false
+		}
+	}
+	return true
+}
+
+func (c *Character) MeetsHeroicAbilityRequirements(ability HeroicAbility) bool {
+	if len(ability.Requirements) == 0 {
+		return true
+	}
+	for _, req := range ability.Requirements {
+		for _, skill := range c.Skills {
+			if skill.Name == req && skill.Level >= HeroicRequirementLevel {
+				return true
+			}
+		}
+	}
+	return false
+}
+
 type HeroicAbility struct {
 	Name         string   `json:"name"`
 	WPCost       int      `json:"wp_cost"`

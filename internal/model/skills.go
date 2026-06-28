@@ -1,5 +1,13 @@
 package model
 
+type Skill struct {
+	Name          string    `json:"name"`
+	Attribute     Attribute `json:"-"`
+	Level         int       `json:"level"`
+	Advanced      bool      `json:"advanced"`
+	IsWeaponSkill bool      `json:"-"`
+}
+
 const (
 	SkillAcrobatics     = "Acrobatics"
 	SkillAwareness      = "Awareness"

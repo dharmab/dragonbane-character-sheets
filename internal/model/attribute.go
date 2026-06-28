@@ -26,21 +26,34 @@ var AllAttributes = []Attribute{
 	AttributeCharisma,
 }
 
-func ParseAttribute(s string) (Attribute, bool) {
-	for _, a := range AllAttributes {
-		if string(a) == s {
-			return a, true
+func ParseAttribute(name string) (Attribute, bool) {
+	for _, attr := range AllAttributes {
+		if string(attr) == name {
+			return attr, true
 		}
 	}
 	return "", false
 }
 
-func ClampAttribute(v int) int {
-	if v < MinimumAttributeValue {
+func ClampAttribute(value int) int {
+	if value < MinimumAttributeValue {
 		return MinimumAttributeValue
 	}
-	if v > MaxiumumAttributeValue {
+	if value > MaxiumumAttributeValue {
 		return MaxiumumAttributeValue
 	}
-	return v
+	return value
+}
+
+// DamageBonus returns the damage bonus die string for an attribute value,
+// or "—" if there is no bonus.
+func DamageBonus(value int) string {
+	switch {
+	case value >= 17:
+		return "d6"
+	case value >= 13:
+		return "d4"
+	default:
+		return "—"
+	}
 }

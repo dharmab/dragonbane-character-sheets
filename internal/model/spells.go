@@ -1,6 +1,73 @@
 package model
 
-import "strings"
+import (
+	"slices"
+	"strings"
+)
+
+// PreparedSpellLimit returns how many spells a character may have prepared at once,
+// based on their INT. Magic tricks do not count against this limit.
+func PreparedSpellLimit(intelligence int) int {
+	switch {
+	case intelligence <= 5:
+		return 3
+	case intelligence <= 8:
+		return 4
+	case intelligence <= 12:
+		return 5
+	case intelligence <= 15:
+		return 6
+	default:
+		return 7
+	}
+}
+
+func (c *Character) PreparedSpellCount() int {
+	n := 0
+	for _, spell := range c.Spells {
+		if spell.Prepared {
+			n++
+		}
+	}
+	return n
+}
+
+func (c *Character) PreparedSpells() []Spell {
+	var out []Spell
+	for _, spell := range c.Spells {
+		if spell.Prepared {
+			out = append(out, spell)
+		}
+	}
+	return out
+}
+
+func (c *Character) KnowsSpell(name string) bool {
+	return slices.ContainsFunc(c.Spells, func(spell Spell) bool { return spell.Name == name })
+}
+
+func IsCoreSpell(name string) bool {
+	return slices.ContainsFunc(PredefinedSpells, func(spell Spell) bool { return spell.Name == name })
+}
+
+func (c *Character) MeetsSpellRequirements(spell Spell) bool {
+	if !c.KnowsMagicSchool(spell.School) {
+		return false
+	}
+	return len(spell.Prerequisites) == 0 || slices.ContainsFunc(spell.Prerequisites, c.KnowsSpell)
+}
+
+func (c *Character) KnowsMagicTrick(name string) bool {
+	return slices.ContainsFunc(c.MagicTricks, func(trick MagicTrick) bool { return trick.Name == name })
+}
+
+func IsCoreMagicTrick(name string) bool {
+	return slices.ContainsFunc(CoreMagicTricks, func(trick MagicTrick) bool { return trick.Name == name })
+}
+
+func (c *Character) MeetsMagicTrickRequirements(trick MagicTrick) bool {
+	return c.KnowsMagicSchool(trick.School)
+}
 
 type Spell struct {
 	Name          string        `json:"name"`

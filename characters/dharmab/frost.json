@@ -179,12 +179,28 @@
     "name": "Obstinate",
     "description": "I never admit when I'm wrong."
   },
-  "armor": "",
-  "helmet": "",
+  "armor": {
+    "name": "",
+    "weight": 1
+  },
+  "helmet": {
+    "name": "",
+    "weight": 1
+  },
   "weapons_at_hand": [
-    "Knife",
-    "",
-    ""
+    {
+      "name": "Knife",
+      "weight": 1,
+      "category": "weapon"
+    },
+    {
+      "name": "",
+      "weight": 1
+    },
+    {
+      "name": "",
+      "weight": 1
+    }
   ],
   "inventory": [
     {
@@ -214,5 +230,8 @@
     "Flint \u0026 tinder",
     "Spice vial"
   ],
-  "heroic_abilities": []
+  "heroic_abilities": [],
+  "magic_skills": [],
+  "grimoire": [],
+  "magic_tricks": []
 }
