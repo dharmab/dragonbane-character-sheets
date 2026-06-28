@@ -5,10 +5,10 @@ import (
 	"strings"
 )
 
-// PreparedSpellLimit returns how many spells a character may have prepared at once,
+// PreparedSpellLimit returns how many spells the character may have prepared at once,
 // based on their INT. Magic tricks do not count against this limit.
-func PreparedSpellLimit(intelligence int) int {
-	switch {
+func (c *Character) PreparedSpellLimit() int {
+	switch intelligence := c.Attributes[AttributeIntelligence]; {
 	case intelligence <= 5:
 		return 3
 	case intelligence <= 8:

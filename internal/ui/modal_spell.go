@@ -19,7 +19,6 @@ func (m *Model) openGrimoire() {
 func (m Model) handleGrimoireKey(key string) (tea.Model, tea.Cmd) {
 	nSpells := len(m.char.Spells)
 	total := nSpells + len(m.char.MagicTricks)
-	trickIdx := m.grimoireSel - nSpells // negative when grimoireSel < nSpells; valid only for trick entries
 	switch key {
 	case keyQuit:
 		return m, tea.Quit
@@ -64,6 +63,7 @@ func (m Model) handleGrimoireKey(key string) (tea.Model, tea.Cmd) {
 			m.modalMode = true
 			return m, textinput.Blink
 		}
+		trickIdx := m.grimoireSel - nSpells
 		if trickIdx >= 0 && trickIdx < len(m.char.MagicTricks) {
 			tr := m.char.MagicTricks[trickIdx]
 			if model.IsCoreMagicTrick(tr.Name) {
@@ -78,6 +78,7 @@ func (m Model) handleGrimoireKey(key string) (tea.Model, tea.Cmd) {
 		}
 		return m, nil
 	case keyRemove:
+		trickIdx := m.grimoireSel - nSpells
 		if m.grimoireSel < nSpells {
 			m.char.Spells = append(m.char.Spells[:m.grimoireSel], m.char.Spells[m.grimoireSel+1:]...)
 		} else if trickIdx >= 0 && trickIdx < len(m.char.MagicTricks) {

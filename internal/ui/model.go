@@ -283,37 +283,39 @@ type Model struct {
 	professionEdit bool // inline text edit of a custom profession name
 	textInput      textinput.Model
 
+	// List picker. activePickerKind distinguishes the picker in use; abilityPicks and
+	// magicPicks are the option lists for the ability and grimoire pickers respectively
+	// (everything else uses pickOptions). pickEquipSource is -1 for enum picks and ≥0
+	// for the inventory index being donned.
 	picking          bool
-	activePickerKind pickerKind // which picker is open when picking == true
+	activePickerKind pickerKind
 	pickOptions      []string
 	pickSelected     int
-	pickEquipSource  int // -1 = enum pick; ≥0 = inventory index being donned
+	pickEquipSource  int
+	abilityPicks     []abilityPick
+	magicPicks       []namePick
 
-	abilityPicks []abilityPick // options for the ability picker (Custom first, then met, then unmet)
-
-	reqMode   bool            // multi-select skill picker for an ability's requirements
+	// Multi-select pickers. reqMode/reqChosen is for an ability's required skills;
+	// prereqMode/prereqChosen is for a spell's prerequisite spells.
+	reqMode   bool
 	reqIndex  int             // ability index whose requirements are being edited
 	reqChosen map[string]bool // skill name -> selected
+
+	prereqMode   bool
+	prereqIndex  int             // grimoire index whose prerequisites are being edited
+	prereqChosen map[string]bool // spell name -> selected
+
+	// Grimoire list modal (spells then tricks).
+	grimoireMode bool
+	grimoireSel  int // cursor in the grimoire list
 
 	// Read-only detail popup. detailMode is true when one is showing;
 	// activeDetailContent selects which view to render.
 	detailMode          bool
 	activeDetailContent detailContent
 	detailAbility       model.HeroicAbility // shown when activeDetailContent == detailContentAbility
-
-	// Magic. The magic-skill add picker and the grimoire add picker both reuse
-	// `picking`; activePickerKind distinguishes them (pickerMagicSkill / pickerMagic).
-	magicPicks []namePick // options for the grimoire add picker (Custom entries first)
-
-	grimoireMode bool // grimoire list modal (spells then tricks)
-	grimoireSel  int  // cursor in the grimoire list
-
-	prereqMode   bool            // multi-select picker for a spell's prerequisite spells
-	prereqIndex  int             // grimoire index whose prerequisites are being edited
-	prereqChosen map[string]bool // spell name -> selected
-
-	detailSpell model.Spell      // shown when activeDetailContent == detailContentSpell
-	detailTrick model.MagicTrick // shown when activeDetailContent == detailContentTrick
+	detailSpell         model.Spell         // shown when activeDetailContent == detailContentSpell
+	detailTrick         model.MagicTrick    // shown when activeDetailContent == detailContentTrick
 
 	// Generic multi-field edit modal. modalMode is true while any edit modal is
 	// open (weakness, item, ability, spell, trick). activeModal holds all inputs and
@@ -584,11 +586,11 @@ func buildGrid(c *model.Character, fields []field) [][]int {
 	grid := make([][]int, len(layout))
 	for r, row := range layout {
 		grid[r] = make([]int, len(row))
-		for c, id := range row {
+		for col, id := range row {
 			if fi, ok := idx[id]; ok {
-				grid[r][c] = fi
+				grid[r][col] = fi
 			} else {
-				grid[r][c] = -1
+				grid[r][col] = -1
 			}
 		}
 	}

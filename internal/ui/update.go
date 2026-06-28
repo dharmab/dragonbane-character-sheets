@@ -136,9 +136,9 @@ func (m Model) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 			m.textInput, cmd = m.textInput.Update(msg)
 			return m, cmd
 		}
-		// modeBrowse: fall through to navigation and section handlers below.
 	}
 
+	// modeBrowse (and modeInlineEdit's exhaustive returns above) fall through here.
 	// Global browse keys.
 	switch key {
 	case keyQuit, keyQuitAlt:

@@ -265,7 +265,7 @@ func (m Model) viewDerivedLines() []string {
 		fmt.Sprintf(" HP %s / %d   WP %s / %d",
 			m.formatInt(idCurrentHP, m.char.CurrentHP), maxHP,
 			m.formatInt(idCurrentWP, m.char.CurrentWP), maxWP),
-		fmt.Sprintf(" Movement: %dm", model.Movement(m.char.Kin, agl)),
+		fmt.Sprintf(" Movement: %dm", m.char.Movement()),
 		fmt.Sprintf(" STR Bonus: %s   AGL Bonus: %s",
 			model.DamageBonus(str),
 			model.DamageBonus(agl)),
@@ -358,9 +358,9 @@ func (m Model) viewSkills(w int) string {
 		return nameCol.Render(sk.Name) + " " + string(sk.Attribute) + "  " + levelCol.Render(levelStr) + "  " + adv
 	}
 
-	// renderSection pairs skills two-per-row and returns the resulting lines.
+	// renderPairedSkills pairs skills two-per-row and returns the resulting lines.
 	// Skills are paired by index: row r shows indices[r] and indices[r+nRows].
-	renderSection := func(title string, indices []int) []string {
+	renderPairedSkills := func(title string, indices []int) []string {
 		n := len(indices)
 		nRows := (n + 1) / 2
 		sectionLines := make([]string, 0, 2+nRows)
@@ -388,7 +388,7 @@ func (m Model) viewSkills(w int) string {
 		return styleHeader.Render(" SKILLS") + "\n" + styleDim.Render(" (none)") + "\n"
 	}
 
-	generalLines := renderSection(" SKILLS", general)
+	generalLines := renderPairedSkills(" SKILLS", general)
 	if len(weapon) == 0 {
 		return strings.Join(generalLines, "\n") + "\n"
 	}
@@ -522,9 +522,8 @@ func (m Model) viewInventoryAndTiny(w int) string {
 }
 
 func (m Model) viewInventory() string {
-	str := m.char.Attributes[model.AttributeStrength]
-	maxSlots := model.InventorySlots(str)
-	used := model.UsedInventorySlots(m.char.Inventory)
+	maxSlots := m.char.InventorySlots()
+	used := m.char.UsedInventorySlots()
 
 	slotInfo := fmt.Sprintf("%d/%d", used, maxSlots)
 	if used > maxSlots {
@@ -716,7 +715,7 @@ func (m Model) viewMagic(w int) string {
 	leftLines = append(leftLines, styleDim.Render(" a add skill   x remove"))
 
 	prepared := m.char.PreparedSpells()
-	limit := model.PreparedSpellLimit(m.char.Attributes[model.AttributeStrength])
+	limit := m.char.PreparedSpellLimit()
 	count := fmt.Sprintf("%d/%d", len(prepared), limit)
 	if len(prepared) > limit {
 		count = styleWarn.Render(count + " (OVER)")
@@ -787,7 +786,7 @@ func (m Model) viewGrimoire() string {
 	var b strings.Builder
 	sep := divider(70)
 
-	limit := model.PreparedSpellLimit(m.char.Attributes[model.AttributeIntelligence])
+	limit := m.char.PreparedSpellLimit()
 	count := fmt.Sprintf("%d/%d prepared", m.char.PreparedSpellCount(), limit)
 	if m.char.PreparedSpellCount() > limit {
 		count = styleWarn.Render(count + " (OVER)")

@@ -1,9 +1,9 @@
 package model
 
-// Movement returns the movement in meters for a given Kin and Agility.
-func Movement(kin Kin, agility int) int {
+// Movement returns the character's movement in meters.
+func (c *Character) Movement() int {
 	var base int
-	switch kin {
+	switch c.Kin {
 	case Wolfkin:
 		base = 12
 	case Halfling, Dwarf, Mallard:
@@ -13,7 +13,7 @@ func Movement(kin Kin, agility int) int {
 	}
 
 	var mod int
-	switch {
+	switch agility := c.Attributes[AttributeAgility]; {
 	case agility <= 6:
 		mod = -4
 	case agility <= 9:

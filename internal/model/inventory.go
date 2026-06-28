@@ -35,11 +35,11 @@ type Item struct {
 	Features         []string     `json:"features,omitempty"`
 }
 
-func InventorySlots(strength int) int { return (strength + 1) / 2 }
+func (c *Character) InventorySlots() int { return (c.Attributes[AttributeStrength] + 1) / 2 }
 
-func UsedInventorySlots(items []Item) int {
+func (c *Character) UsedInventorySlots() int {
 	total := 0
-	for _, item := range items {
+	for _, item := range c.Inventory {
 		total += max(1, item.Weight)
 	}
 	return total
