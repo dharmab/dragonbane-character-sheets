@@ -188,7 +188,7 @@ func (m Model) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 
 	f := m.currentField()
 
-	if f.section == secGear {
+	if f.section == sectionGear {
 		slot := m.gearSlotPtr(f.id)
 		switch key {
 		case keyDonDoff:
@@ -199,7 +199,7 @@ func (m Model) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		case keyEnter:
 			if slot != nil {
 				if slot.Category == model.ItemCategoryGeneric {
-					slot.Category = gearSlotCategory(f.id.family)
+					slot.Category = gearSlotCategory(f.id.group)
 				}
 				m.startItemEdit(slot)
 				return m, textinput.Blink
@@ -207,7 +207,7 @@ func (m Model) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		}
 	}
 
-	if f.section == secInventory {
+	if f.section == sectionInventory {
 		idx := f.id.index
 		inBounds := idx >= 0 && idx < len(m.char.Inventory)
 		switch key {
@@ -222,7 +222,7 @@ func (m Model) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 				return m, textinput.Blink
 			}
 		case keyIncr, keyIncrAlt, keyDecr:
-			if f.id.family == famInvName && inBounds {
+			if f.id.group == groupInventoryName && inBounds {
 				base, qty := model.ParseQuantity(m.char.Inventory[idx].Name)
 				m.char.Inventory[idx].Name = model.ApplyQuantity(base, max(1, qty+signOf(key)))
 				m.autoSave()
@@ -257,7 +257,7 @@ func (m Model) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		}
 	}
 
-	if f.section == secTinyItems {
+	if f.section == sectionTinyItems {
 		idx := f.id.index
 		inBounds := idx >= 0 && idx < len(m.char.TinyItems)
 		switch key {
@@ -284,9 +284,9 @@ func (m Model) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		}
 	}
 
-	if f.section == secHeroic {
+	if f.section == sectionHeroic {
 		// Kin-granted abilities are read-only; enter shows their description.
-		if f.id.family == famKinAbility {
+		if f.id.group == groupKinAbility {
 			switch key {
 			case keyAdd:
 				m.openAbilityPicker()
@@ -336,9 +336,9 @@ func (m Model) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		}
 	}
 
-	if f.section == secMagic {
-		switch f.id.family {
-		case famMagicSkillLevel, famMagicSkillAdv:
+	if f.section == sectionMagic {
+		switch f.id.group {
+		case groupMagicSkillLevel, groupMagicSkillAdvanced:
 			switch key {
 			case keyAdd:
 				m.openMagicSkillPicker()
@@ -352,12 +352,12 @@ func (m Model) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 				}
 				return m, nil
 			}
-		case famMagicEmpty:
+		case groupMagicEmpty:
 			if key == keyAdd {
 				m.openMagicSkillPicker()
 				return m, nil
 			}
-		case famPreparedSpell:
+		case groupPreparedSpell:
 			// 'g' opens the grimoire; it belongs to the prepared-spells column, not the
 			// magic-skills column.
 			switch key {
@@ -372,7 +372,7 @@ func (m Model) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 				}
 				return m, nil
 			}
-		case famPreparedTrick:
+		case groupPreparedTrick:
 			switch key {
 			case keyGrimoire:
 				m.openGrimoire()
@@ -384,7 +384,7 @@ func (m Model) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 				}
 				return m, nil
 			}
-		case famPreparedEmpty:
+		case groupPreparedEmpty:
 			if key == keyGrimoire {
 				m.openGrimoire()
 				return m, nil
@@ -396,7 +396,7 @@ func (m Model) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	switch f.kind {
 	case kindText:
 		if key == keyEnter {
-			if f.id.family == famWeaknessName {
+			if f.id.group == groupWeaknessName {
 				m.startWeaknessEdit()
 				return m, textinput.Blink
 			}
@@ -473,15 +473,15 @@ func (m *Model) startEditing() {
 // textInputWidth is the on-screen width of the inline single-field text editor.
 const textInputWidth = 28
 
-// textFieldValue returns the pointer to the string the focused text field edits,
+// textFieldTarget returns the pointer to the string the focused text field edits,
 // or nil if the focused field is not an editable text field. textFieldValue and
 // commitText both go through it so reading and writing can never disagree.
 func (m *Model) textFieldTarget() *string {
 	f := m.currentField()
-	switch f.id.family {
-	case famName:
+	switch f.id.group {
+	case groupName:
 		return &m.char.Name
-	case famTiny:
+	case groupTinyItem:
 		if i := f.id.index; i >= 0 && i < len(m.char.TinyItems) {
 			return &m.char.TinyItems[i]
 		}
@@ -539,12 +539,12 @@ func (m *Model) applyPickerSelection() {
 		return
 	}
 	chosen := m.pickOptions[m.pickSelected]
-	fam := m.currentField().id.family
-	if fam == famProfession && chosen == customLabel {
+	group := m.currentField().id.group
+	if group == groupProfession && chosen == customLabel {
 		m.startProfessionEdit()
 		return
 	}
-	if ef, ok := enumFieldFor(fam); ok {
+	if ef, ok := enumFieldFor(group); ok {
 		ef.set(m.char, chosen)
 	}
 }
@@ -646,30 +646,30 @@ func (m *Model) applyEquip() {
 
 func (m *Model) adjustInt(delta int) {
 	f := m.currentField()
-	switch f.id.family {
-	case famAttr:
+	switch f.id.group {
+	case groupAttribute:
 		// Changing CON or WIL moves the HP/WP maxima, so always re-clamp resources;
 		// for the other attributes the clamp is a harmless no-op.
 		attr := model.AllAttributes[f.id.index]
 		m.char.Attributes[attr] = model.ClampAttribute(m.char.Attributes[attr] + delta)
 		m.char.ClampResources()
-	case famCurrentHP:
+	case groupCurrentHP:
 		m.char.CurrentHP = max(0, min(m.char.MaxHP(), m.char.CurrentHP+delta))
-	case famCurrentWP:
+	case groupCurrentWP:
 		m.char.CurrentWP = max(0, min(m.char.MaxWP(), m.char.CurrentWP+delta))
-	case famSkillLevel:
+	case groupSkillLevel:
 		if i := f.id.index; i >= 0 && i < len(m.char.Skills) {
 			m.char.Skills[i].Level = max(0, m.char.Skills[i].Level+delta)
 		}
-	case famInvWeight:
+	case groupInventoryWeight:
 		if i := f.id.index; i >= 0 && i < len(m.char.Inventory) {
 			m.char.Inventory[i].Weight = max(1, m.char.Inventory[i].Weight+delta)
 		}
-	case famWeaponDur:
+	case groupWeaponDurability:
 		if i := f.id.index; i >= 0 && i < len(m.char.Weapons) {
 			m.char.Weapons[i].Durability = max(0, m.char.Weapons[i].Durability+delta)
 		}
-	case famMagicSkillLevel:
+	case groupMagicSkillLevel:
 		if i := f.id.index; i >= 0 && i < len(m.char.MagicSkills) {
 			m.char.MagicSkills[i].Level = max(0, m.char.MagicSkills[i].Level+delta)
 		}
@@ -694,23 +694,23 @@ var conditionOrder = []struct {
 
 func (m *Model) toggleBool() {
 	f := m.currentField()
-	switch f.id.family {
-	case famSkillAdv:
+	switch f.id.group {
+	case groupSkillAdvanced:
 		if i := f.id.index; i >= 0 && i < len(m.char.Skills) {
 			m.char.Skills[i].Advanced = !m.char.Skills[i].Advanced
 		}
-	case famCondition:
+	case groupCondition:
 		if i := f.id.index; i >= 0 && i < len(conditionOrder) {
 			p := conditionOrder[i].ptr(m.char)
 			*p = !*p
 		}
-	case famMagicSkillAdv:
+	case groupMagicSkillAdvanced:
 		if i := f.id.index; i >= 0 && i < len(m.char.MagicSkills) {
 			m.char.MagicSkills[i].Advanced = !m.char.MagicSkills[i].Advanced
 		}
-	case famRestRound:
+	case groupRestRound:
 		m.char.UsedRoundRest = !m.char.UsedRoundRest
-	case famRestStretch:
+	case groupRestStretch:
 		m.char.UsedShiftRest = !m.char.UsedShiftRest
 	default: // not a boolean field
 	}
@@ -759,12 +759,12 @@ func (m *Model) stowGear(slot *model.Item) {
 // gearSlotPtr returns the gear-slot item a gear field belongs to (name or any of
 // its stat fields), or nil if the field is not a gear field.
 func (m *Model) gearSlotPtr(id fieldID) *model.Item {
-	switch id.family {
-	case famArmor:
+	switch id.group {
+	case groupArmor:
 		return &m.char.Armor
-	case famHelmet:
+	case groupHelmet:
 		return &m.char.Helmet
-	case famWeaponAtHand, famWeaponDur:
+	case groupWeaponAtHand, groupWeaponDurability:
 		if i := id.index; i >= 0 && i < len(m.char.Weapons) {
 			return &m.char.Weapons[i]
 		}
@@ -773,15 +773,15 @@ func (m *Model) gearSlotPtr(id fieldID) *model.Item {
 	return nil
 }
 
-// gearSlotCategory maps a gear slot's field family to the item category that slot
+// gearSlotCategory maps a gear slot's field group to the item category that slot
 // holds, so the item modal can preselect it (mirrors the equip-time auto-tagging).
-func gearSlotCategory(fam fieldFamily) model.ItemCategory {
-	switch fam {
-	case famArmor:
+func gearSlotCategory(group fieldGroup) model.ItemCategory {
+	switch group {
+	case groupArmor:
 		return model.ItemCategoryArmor
-	case famHelmet:
+	case groupHelmet:
 		return model.ItemCategoryHelmet
-	case famWeaponAtHand, famWeaponDur:
+	case groupWeaponAtHand, groupWeaponDurability:
 		return model.ItemCategoryWeapon
 	}
 	return model.ItemCategoryGeneric
@@ -800,822 +800,6 @@ func signOf(key string) int {
 		return -1
 	}
 	return 1
-}
-
-// openAbilityPicker opens the picker. The first option is customLabel; then predefined
-// abilities whose requirements the character meets (selectable); then the rest, dimmed
-// and unselectable at the bottom. Each row shows the ability's requirements.
-func (m *Model) openAbilityPicker() {
-	const nameW = 24
-	var met, unmet []abilityPick
-	for _, ability := range model.CoreHeroicAbilities {
-		display := ability.Name
-		if label := model.RequirementLabel(ability.Requirements); label != "" {
-			display = fmt.Sprintf("%-*s %s", nameW, ability.Name, label)
-		}
-		ap := abilityPick{
-			name:       ability.Name,
-			display:    display,
-			selectable: m.char.MeetsHeroicAbilityRequirements(ability),
-		}
-		if ap.selectable {
-			met = append(met, ap)
-		} else {
-			unmet = append(unmet, ap)
-		}
-	}
-	picks := make([]abilityPick, 0, 1+len(met)+len(unmet))
-	picks = append(picks, abilityPick{name: "", display: customLabel, selectable: true})
-	picks = append(picks, met...)
-	picks = append(picks, unmet...)
-	m.abilityPicks = picks
-	m.pickSelected = 0
-	m.pickAbility = true
-	m.picking = true
-}
-
-func (m *Model) applyAbilityPick() {
-	if m.pickSelected < 0 || m.pickSelected >= len(m.abilityPicks) {
-		return
-	}
-	pick := m.abilityPicks[m.pickSelected]
-	if !pick.selectable {
-		return
-	}
-	if pick.name == "" { // Custom…
-		m.char.HeroicAbilities = append(m.char.HeroicAbilities, model.HeroicAbility{})
-		idx := len(m.char.HeroicAbilities) - 1
-		m.rebuildFields()
-		if fi := m.fieldIndex(idHab(idx)); fi >= 0 {
-			m.focus = fi
-		}
-		m.startAbilityEdit(idx)
-		return
-	}
-	var def model.HeroicAbility
-	for _, ability := range model.CoreHeroicAbilities {
-		if ability.Name == pick.name {
-			def = ability
-			break
-		}
-	}
-	// Stackable (HP/WP-bonus) abilities already present bump their count instead of
-	// adding a duplicate row.
-	if def.HPBonus != 0 || def.WPBonus != 0 {
-		for i := range m.char.HeroicAbilities {
-			if base, qty := model.ParseQuantity(m.char.HeroicAbilities[i].Name); base == def.Name {
-				m.char.HeroicAbilities[i].Name = model.ApplyQuantity(base, qty+1)
-				m.char.ClampResources()
-				return
-			}
-		}
-	}
-	m.char.HeroicAbilities = append(m.char.HeroicAbilities, model.HeroicAbility{
-		Name:         def.Name,
-		WPCost:       def.WPCost,
-		Description:  def.Description,
-		Requirements: append([]string(nil), def.Requirements...),
-		HPBonus:      def.HPBonus,
-		WPBonus:      def.WPBonus,
-	})
-	m.rebuildFields()
-	m.char.ClampResources()
-}
-
-func (m *Model) startAbilityEdit(idx int) {
-	m.abilityMode = true
-	m.abilityIndex = idx
-	m.abilityActive = 0
-	m.syncAbilityFocus()
-}
-
-// syncAbilityFocus focuses the text input for the active modal field (none for the
-// requirements field) and seeds it from the ability's current value.
-func (m *Model) syncAbilityFocus() {
-	a := m.char.HeroicAbilities[m.abilityIndex]
-	m.abilityName.Blur()
-	m.abilityCost.Blur()
-	m.abilityDesc.Blur()
-	switch m.abilityActive {
-	case 0:
-		m.abilityName.SetValue(a.Name)
-		m.abilityName.CursorEnd()
-		m.abilityName.Focus()
-	case 1:
-		m.abilityCost.SetValue(strconv.Itoa(a.WPCost))
-		m.abilityCost.CursorEnd()
-		m.abilityCost.Focus()
-	case 2:
-		m.abilityDesc.SetValue(a.Description)
-		m.abilityDesc.CursorEnd()
-		m.abilityDesc.Focus()
-	}
-}
-
-func (m *Model) commitCurrentAbilityField() {
-	idx := m.abilityIndex
-	if idx < 0 || idx >= len(m.char.HeroicAbilities) {
-		return
-	}
-	switch m.abilityActive {
-	case 0:
-		m.char.HeroicAbilities[idx].Name = m.abilityName.Value()
-	case 1:
-		if n, err := strconv.Atoi(strings.TrimSpace(m.abilityCost.Value())); err == nil {
-			m.char.HeroicAbilities[idx].WPCost = max(0, n)
-		} else {
-			m.char.HeroicAbilities[idx].WPCost = 0
-		}
-	case 2:
-		m.char.HeroicAbilities[idx].Description = m.abilityDesc.Value()
-	}
-}
-
-func (m *Model) closeAbilityEdit() {
-	m.abilityMode = false
-	m.abilityName.Blur()
-	m.abilityCost.Blur()
-	m.abilityDesc.Blur()
-}
-
-func (m Model) handleAbilityKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
-	key := msg.String()
-	switch key {
-	case keyQuit:
-		return m, tea.Quit
-	case keyEnter:
-		if m.abilityActive == 3 {
-			m.openReqPicker(m.abilityIndex)
-			return m, nil
-		}
-		m.commitCurrentAbilityField()
-		m.closeAbilityEdit()
-		m.char.ClampResources()
-		m.autoSave()
-		return m, nil
-	case keyEsc:
-		m.commitCurrentAbilityField()
-		m.closeAbilityEdit()
-		m.char.ClampResources()
-		m.autoSave()
-		return m, nil
-	case keyDown:
-		m.commitCurrentAbilityField()
-		m.abilityActive = (m.abilityActive + 1) % 4
-		m.syncAbilityFocus()
-		return m, textinput.Blink
-	case keyUp:
-		m.commitCurrentAbilityField()
-		m.abilityActive = (m.abilityActive + 3) % 4
-		m.syncAbilityFocus()
-		return m, textinput.Blink
-	default:
-		var cmd tea.Cmd
-		switch m.abilityActive {
-		case 0:
-			m.abilityName, cmd = m.abilityName.Update(msg)
-		case 1:
-			m.abilityCost, cmd = m.abilityCost.Update(msg)
-		case 2:
-			m.abilityDesc, cmd = m.abilityDesc.Update(msg)
-		}
-		return m, cmd
-	}
-}
-
-// openReqPicker opens the multi-select skill list for editing ability idx's
-// requirements. It reuses pickOptions/pickSelected; reqChosen tracks the toggles.
-func (m *Model) openReqPicker(idx int) {
-	m.reqMode = true
-	m.reqIndex = idx
-	m.reqChosen = make(map[string]bool)
-	for _, requirement := range m.char.HeroicAbilities[idx].Requirements {
-		m.reqChosen[requirement] = true
-	}
-	m.pickOptions = m.pickOptions[:0]
-	for _, skill := range model.CoreSkills {
-		m.pickOptions = append(m.pickOptions, skill.Name)
-	}
-	m.pickSelected = 0
-}
-
-func (m Model) handleReqKey(key string) (tea.Model, tea.Cmd) {
-	switch key {
-	case keyEsc:
-		m.reqMode = false
-	case keyUp, keyVimUp:
-		if m.pickSelected > 0 {
-			m.pickSelected--
-		}
-	case keyDown, keyVimDown:
-		if m.pickSelected < len(m.pickOptions)-1 {
-			m.pickSelected++
-		}
-	case keySpace:
-		name := m.pickOptions[m.pickSelected]
-		m.reqChosen[name] = !m.reqChosen[name]
-	case keyEnter:
-		// Write selected skills back in predefined order for stable display.
-		var reqs []string
-		for _, skill := range model.CoreSkills {
-			if m.reqChosen[skill.Name] {
-				reqs = append(reqs, skill.Name)
-			}
-		}
-		if m.reqIndex >= 0 && m.reqIndex < len(m.char.HeroicAbilities) {
-			m.char.HeroicAbilities[m.reqIndex].Requirements = reqs
-		}
-		m.reqMode = false
-		m.autoSave()
-	}
-	return m, nil
-}
-
-func (m *Model) startWeaknessEdit() {
-	m.weaknessMode = true
-	m.weaknessActive = 0
-	m.weaknessName.SetValue(m.char.Weakness.Name)
-	m.weaknessName.CursorEnd()
-	m.weaknessName.Focus()
-	m.weaknessDesc.SetValue(m.char.Weakness.Description)
-	m.weaknessDesc.Blur()
-}
-
-func (m *Model) commitCurrentWeaknessField() {
-	if m.weaknessActive == 0 {
-		m.char.Weakness.Name = m.weaknessName.Value()
-	} else {
-		m.char.Weakness.Description = m.weaknessDesc.Value()
-	}
-	m.autoSave()
-}
-
-func (m Model) handleWeaknessKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
-	key := msg.String()
-	switch key {
-	case keyQuit:
-		return m, tea.Quit
-	case keyEnter, keyEsc:
-		m.commitCurrentWeaknessField()
-		m.weaknessMode = false
-		m.weaknessName.Blur()
-		m.weaknessDesc.Blur()
-		return m, nil
-	case keyUp, keyDown:
-		m.commitCurrentWeaknessField()
-		if m.weaknessActive == 0 {
-			m.weaknessActive = 1
-			m.weaknessDesc.SetValue(m.char.Weakness.Description)
-			m.weaknessDesc.CursorEnd()
-			m.weaknessDesc.Focus()
-			m.weaknessName.Blur()
-		} else {
-			m.weaknessActive = 0
-			m.weaknessName.SetValue(m.char.Weakness.Name)
-			m.weaknessName.CursorEnd()
-			m.weaknessName.Focus()
-			m.weaknessDesc.Blur()
-		}
-		return m, textinput.Blink
-	default:
-		var cmd tea.Cmd
-		if m.weaknessActive == 0 {
-			m.weaknessName, cmd = m.weaknessName.Update(msg)
-		} else {
-			m.weaknessDesc, cmd = m.weaknessDesc.Update(msg)
-		}
-		return m, cmd
-	}
-}
-
-// Magic.
-
-// Spell edit modal field indices.
-const (
-	spellFieldName = iota
-	spellFieldSchool
-	spellFieldRank
-	spellFieldCasting
-	spellFieldRange
-	spellFieldDuration
-	spellFieldReq
-	spellFieldPrereq
-	spellFieldDesc
-	spellFieldCount
-)
-
-// Trick edit modal field indices.
-const (
-	trickFieldName = iota
-	trickFieldSchool
-	trickFieldDesc
-	trickFieldCount
-)
-
-func (m *Model) openGrimoire() {
-	m.grimoireMode = true
-	m.grimoireSel = 0
-}
-
-// handleGrimoireKey drives the grimoire list modal: spells first (indices 0..nSpells-1),
-// then magic tricks. Spell/trick edit and the record pickers overlay this modal.
-func (m Model) handleGrimoireKey(key string) (tea.Model, tea.Cmd) {
-	nSpells := len(m.char.Spells)
-	total := nSpells + len(m.char.MagicTricks)
-	switch key {
-	case keyQuit:
-		return m, tea.Quit
-	case keyEsc, keyQuitAlt:
-		m.grimoireMode = false
-		return m, nil
-	case keyUp, keyVimUp:
-		if m.grimoireSel > 0 {
-			m.grimoireSel--
-		}
-		return m, nil
-	case keyDown, keyVimDown:
-		if m.grimoireSel < total-1 {
-			m.grimoireSel++
-		}
-		return m, nil
-	case keyAdd:
-		m.openAddMagicPicker()
-		return m, nil
-	case keySpace:
-		// Study the grimoire: toggle whether a spell is prepared. Advisory only — the
-		// INT limit is shown but never enforced.
-		if m.grimoireSel < nSpells {
-			m.char.Spells[m.grimoireSel].Prepared = !m.char.Spells[m.grimoireSel].Prepared
-			m.rebuildFields() // the prepared-spells column changed
-			m.clampFocus()
-			m.autoSave()
-		}
-		return m, nil
-	case keyEnter:
-		// Predefined spells/tricks are canonical: enter shows a read-only detail popup.
-		// Only custom entries open the editor.
-		if m.grimoireSel < nSpells {
-			sp := m.char.Spells[m.grimoireSel]
-			if model.IsCoreSpell(sp.Name) {
-				m.detailSpell = sp
-				m.spellDetailMode = true
-				return m, nil
-			}
-			m.startSpellEdit(m.grimoireSel)
-			return m, textinput.Blink
-		}
-		if ti := m.grimoireSel - nSpells; ti >= 0 && ti < len(m.char.MagicTricks) {
-			tr := m.char.MagicTricks[ti]
-			if model.IsCoreMagicTrick(tr.Name) {
-				m.detailTrick = tr
-				m.trickDetailMode = true
-				return m, nil
-			}
-			m.startTrickEdit(ti)
-			return m, textinput.Blink
-		}
-		return m, nil
-	case keyRemove:
-		if m.grimoireSel < nSpells {
-			m.char.Spells = append(m.char.Spells[:m.grimoireSel], m.char.Spells[m.grimoireSel+1:]...)
-		} else if ti := m.grimoireSel - nSpells; ti >= 0 && ti < len(m.char.MagicTricks) {
-			m.char.MagicTricks = append(m.char.MagicTricks[:ti], m.char.MagicTricks[ti+1:]...)
-		}
-		if newTotal := len(m.char.Spells) + len(m.char.MagicTricks); m.grimoireSel >= newTotal {
-			m.grimoireSel = max(0, newTotal-1)
-		}
-		m.rebuildFields()
-		m.clampFocus()
-		m.autoSave()
-		return m, nil
-	}
-	return m, nil
-}
-
-func (m *Model) openMagicSkillPicker() {
-	known := make(map[string]bool, len(m.char.MagicSkills))
-	for _, sk := range m.char.MagicSkills {
-		known[sk.Name] = true
-	}
-	m.pickOptions = m.pickOptions[:0]
-	for _, def := range model.MagicSkills {
-		if !known[def.Name] {
-			m.pickOptions = append(m.pickOptions, def.Name)
-		}
-	}
-	if len(m.pickOptions) == 0 { // all three already known
-		return
-	}
-	m.pickSelected = 0
-	m.pickMagicSkill = true
-	m.picking = true
-}
-
-func (m *Model) applyMagicSkillPick() {
-	if m.pickSelected < 0 || m.pickSelected >= len(m.pickOptions) {
-		return
-	}
-	name := m.pickOptions[m.pickSelected]
-	for _, def := range model.MagicSkills {
-		if def.Name == name {
-			sk := def
-			sk.Level = model.UntrainedSkillLevel
-			m.char.MagicSkills = append(m.char.MagicSkills, sk)
-			break
-		}
-	}
-	m.rebuildFields()
-}
-
-// openAddMagicPicker builds the grimoire add picker. Spells and tricks are recorded
-// through the same picker (a single 'a' action). Like the heroic-ability picker, the
-// Custom… entries come first, then everything the character can record (school and
-// prerequisites met) sorted by name, then the rest dimmed and sorted by name.
-func (m *Model) openAddMagicPicker() {
-	m.magicPicks = m.magicPicks[:0]
-	m.magicPicks = append(m.magicPicks,
-		namePick{display: "Custom Spell…", selectable: true},
-		namePick{display: "Custom Trick…", trick: true, selectable: true},
-	)
-	var avail, unavail []namePick
-	add := func(p namePick) {
-		if p.selectable {
-			avail = append(avail, p)
-		} else {
-			unavail = append(unavail, p)
-		}
-	}
-	// Spells and tricks already recorded are omitted: each can be learned only once.
-	for _, spell := range model.PredefinedSpells {
-		if m.char.KnowsSpell(spell.Name) {
-			continue
-		}
-		add(namePick{name: spell.Name, display: spell.Name, selectable: m.char.MeetsSpellRequirements(spell)})
-	}
-	for _, trick := range model.CoreMagicTricks {
-		if m.char.KnowsMagicTrick(trick.Name) {
-			continue
-		}
-		add(namePick{name: trick.Name, display: trick.Name, trick: true, selectable: m.char.MeetsMagicTrickRequirements(trick)})
-	}
-	byName := func(a, b namePick) int { return strings.Compare(a.display, b.display) }
-	slices.SortFunc(avail, byName)
-	slices.SortFunc(unavail, byName)
-	m.magicPicks = append(m.magicPicks, avail...)
-	m.magicPicks = append(m.magicPicks, unavail...)
-	m.pickSelected = 0
-	m.pickMagic = true
-	m.picking = true
-}
-
-func (m *Model) applyMagicPick() {
-	if m.pickSelected < 0 || m.pickSelected >= len(m.magicPicks) {
-		return
-	}
-	pick := m.magicPicks[m.pickSelected]
-	if !pick.selectable {
-		return
-	}
-	if pick.trick {
-		m.addTrick(pick.name)
-		return
-	}
-	m.addSpell(pick.name)
-}
-
-// addSpell records a spell into the grimoire. An empty name means Custom…: a blank spell
-// with valid enum defaults (so cycling works) is created and its editor opened.
-func (m *Model) addSpell(name string) {
-	if name == "" {
-		m.char.Spells = append(m.char.Spells, model.Spell{
-			School:      model.MagiclSchoolAnimism,
-			CastingTime: model.CastingTimeAction,
-			Duration:    model.SpellDurationInstant,
-		})
-		idx := len(m.char.Spells) - 1
-		m.grimoireSel = idx
-		m.rebuildFields()
-		m.startSpellEdit(idx)
-		return
-	}
-	if m.char.KnowsSpell(name) { // a spell can be learned only once
-		return
-	}
-	for _, spell := range model.PredefinedSpells {
-		if spell.Name == name {
-			cp := spell
-			cp.Prerequisites = append([]string(nil), spell.Prerequisites...)
-			cp.Requirements = append([]string(nil), spell.Requirements...)
-			m.char.Spells = append(m.char.Spells, cp)
-			break
-		}
-	}
-	m.rebuildFields()
-}
-
-// addTrick adds a magic trick. An empty name means Custom…: a blank trick is created and
-// its editor opened.
-func (m *Model) addTrick(name string) {
-	if name == "" {
-		m.char.MagicTricks = append(m.char.MagicTricks, model.MagicTrick{School: model.MagiclSchoolAnimism})
-		idx := len(m.char.MagicTricks) - 1
-		m.grimoireSel = len(m.char.Spells) + idx
-		m.startTrickEdit(idx)
-		return
-	}
-	if m.char.KnowsMagicTrick(name) { // a trick can be learned only once
-		return
-	}
-	for _, trick := range model.CoreMagicTricks {
-		if trick.Name == name {
-			m.char.MagicTricks = append(m.char.MagicTricks, trick)
-			break
-		}
-	}
-}
-
-func (m *Model) startSpellEdit(idx int) {
-	m.spellMode = true
-	m.spellIndex = idx
-	m.spellActive = spellFieldName
-	m.syncSpellFocus()
-}
-
-// syncSpellFocus focuses the text input for the active modal field (none for the enum or
-// prerequisites fields) and seeds it from the spell's current value.
-func (m *Model) syncSpellFocus() {
-	sp := m.char.Spells[m.spellIndex]
-	m.spellName.Blur()
-	m.spellRank.Blur()
-	m.spellRange.Blur()
-	m.spellReq.Blur()
-	m.spellDesc.Blur()
-	switch m.spellActive {
-	case spellFieldName:
-		m.spellName.SetValue(sp.Name)
-		m.spellName.CursorEnd()
-		m.spellName.Focus()
-	case spellFieldRank:
-		m.spellRank.SetValue(strconv.Itoa(sp.Rank))
-		m.spellRank.CursorEnd()
-		m.spellRank.Focus()
-	case spellFieldRange:
-		m.spellRange.SetValue(sp.Range)
-		m.spellRange.CursorEnd()
-		m.spellRange.Focus()
-	case spellFieldReq:
-		m.spellReq.SetValue(strings.Join(sp.Requirements, ", "))
-		m.spellReq.CursorEnd()
-		m.spellReq.Focus()
-	case spellFieldDesc:
-		m.spellDesc.SetValue(sp.Description)
-		m.spellDesc.CursorEnd()
-		m.spellDesc.Focus()
-	}
-}
-
-func (m *Model) commitCurrentSpellField() {
-	idx := m.spellIndex
-	if idx < 0 || idx >= len(m.char.Spells) {
-		return
-	}
-	sp := &m.char.Spells[idx]
-	switch m.spellActive {
-	case spellFieldName:
-		sp.Name = m.spellName.Value()
-	case spellFieldRank:
-		if n, err := strconv.Atoi(strings.TrimSpace(m.spellRank.Value())); err == nil {
-			sp.Rank = max(0, n)
-		} else {
-			sp.Rank = 0
-		}
-	case spellFieldRange:
-		sp.Range = m.spellRange.Value()
-	case spellFieldReq:
-		sp.Requirements = splitCSV(m.spellReq.Value())
-	case spellFieldDesc:
-		sp.Description = m.spellDesc.Value()
-	}
-}
-
-func (m *Model) closeSpellEdit() {
-	m.spellMode = false
-	m.spellName.Blur()
-	m.spellRank.Blur()
-	m.spellRange.Blur()
-	m.spellReq.Blur()
-	m.spellDesc.Blur()
-}
-
-func (m Model) handleSpellKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
-	key := msg.String()
-	if key == keyQuit {
-		return m, tea.Quit
-	}
-	// Enum fields (School/Casting Time/Duration) are not text inputs: arrows cycle them.
-	if key == keyLeft || key == keyRight {
-		if m.cycleSpellEnum(m.spellActive, arrowSign(key)) {
-			m.autoSave()
-			return m, nil
-		}
-	}
-	switch key {
-	case keyEnter:
-		if m.spellActive == spellFieldPrereq {
-			m.openPrereqPicker(m.spellIndex)
-			return m, nil
-		}
-		m.commitCurrentSpellField()
-		m.closeSpellEdit()
-		m.autoSave()
-		return m, nil
-	case keyEsc:
-		m.commitCurrentSpellField()
-		m.closeSpellEdit()
-		m.autoSave()
-		return m, nil
-	case keyDown:
-		m.commitCurrentSpellField()
-		m.spellActive = (m.spellActive + 1) % spellFieldCount
-		m.syncSpellFocus()
-		return m, textinput.Blink
-	case keyUp:
-		m.commitCurrentSpellField()
-		m.spellActive = (m.spellActive - 1 + spellFieldCount) % spellFieldCount
-		m.syncSpellFocus()
-		return m, textinput.Blink
-	default:
-		var cmd tea.Cmd
-		switch m.spellActive {
-		case spellFieldName:
-			m.spellName, cmd = m.spellName.Update(msg)
-		case spellFieldRank:
-			m.spellRank, cmd = m.spellRank.Update(msg)
-		case spellFieldRange:
-			m.spellRange, cmd = m.spellRange.Update(msg)
-		case spellFieldReq:
-			m.spellReq, cmd = m.spellReq.Update(msg)
-		case spellFieldDesc:
-			m.spellDesc, cmd = m.spellDesc.Update(msg)
-		}
-		return m, cmd
-	}
-}
-
-// cycleSpellEnum advances the active enum field by dir (±1) and reports whether the
-// active field was an enum field (so text fields can fall through to the text input).
-func (m *Model) cycleSpellEnum(active, dir int) bool {
-	if m.spellIndex < 0 || m.spellIndex >= len(m.char.Spells) {
-		return false
-	}
-	sp := &m.char.Spells[m.spellIndex]
-	switch active {
-	case spellFieldSchool:
-		sp.School = model.MagicSchool(cycleEnum(toStrings(model.AllMagicSchools), string(sp.School), dir))
-	case spellFieldCasting:
-		sp.CastingTime = model.CastingTime(cycleEnum(toStrings(model.AllCastingTimes), string(sp.CastingTime), dir))
-	case spellFieldDuration:
-		sp.Duration = model.SpellDuration(cycleEnum(toStrings(model.AllSpellDurations), string(sp.Duration), dir))
-	default:
-		return false
-	}
-	return true
-}
-
-func (m *Model) startTrickEdit(idx int) {
-	m.trickMode = true
-	m.trickIndex = idx
-	m.trickActive = trickFieldName
-	m.syncTrickFocus()
-}
-
-func (m *Model) syncTrickFocus() {
-	tr := m.char.MagicTricks[m.trickIndex]
-	m.trickName.Blur()
-	m.trickDesc.Blur()
-	switch m.trickActive {
-	case trickFieldName:
-		m.trickName.SetValue(tr.Name)
-		m.trickName.CursorEnd()
-		m.trickName.Focus()
-	case trickFieldDesc:
-		m.trickDesc.SetValue(tr.Description)
-		m.trickDesc.CursorEnd()
-		m.trickDesc.Focus()
-	}
-}
-
-func (m *Model) commitCurrentTrickField() {
-	idx := m.trickIndex
-	if idx < 0 || idx >= len(m.char.MagicTricks) {
-		return
-	}
-	switch m.trickActive {
-	case trickFieldName:
-		m.char.MagicTricks[idx].Name = m.trickName.Value()
-	case trickFieldDesc:
-		m.char.MagicTricks[idx].Description = m.trickDesc.Value()
-	}
-}
-
-func (m *Model) closeTrickEdit() {
-	m.trickMode = false
-	m.trickName.Blur()
-	m.trickDesc.Blur()
-}
-
-func (m Model) handleTrickKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
-	key := msg.String()
-	if key == keyQuit {
-		return m, tea.Quit
-	}
-	if (key == keyLeft || key == keyRight) && m.trickActive == trickFieldSchool {
-		if idx := m.trickIndex; idx >= 0 && idx < len(m.char.MagicTricks) {
-			tr := &m.char.MagicTricks[idx]
-			tr.School = model.MagicSchool(cycleEnum(toStrings(model.AllMagicSchools), string(tr.School), arrowSign(key)))
-			m.autoSave()
-		}
-		return m, nil
-	}
-	switch key {
-	case keyEnter, keyEsc:
-		m.commitCurrentTrickField()
-		m.closeTrickEdit()
-		m.autoSave()
-		return m, nil
-	case keyDown:
-		m.commitCurrentTrickField()
-		m.trickActive = (m.trickActive + 1) % trickFieldCount
-		m.syncTrickFocus()
-		return m, textinput.Blink
-	case keyUp:
-		m.commitCurrentTrickField()
-		m.trickActive = (m.trickActive - 1 + trickFieldCount) % trickFieldCount
-		m.syncTrickFocus()
-		return m, textinput.Blink
-	default:
-		var cmd tea.Cmd
-		switch m.trickActive {
-		case trickFieldName:
-			m.trickName, cmd = m.trickName.Update(msg)
-		case trickFieldDesc:
-			m.trickDesc, cmd = m.trickDesc.Update(msg)
-		}
-		return m, cmd
-	}
-}
-
-// openPrereqPicker opens the multi-select list of other grimoire spells for editing spell
-// idx's prerequisites. It reuses pickOptions/pickSelected; prereqChosen tracks the toggles.
-func (m *Model) openPrereqPicker(idx int) {
-	m.prereqMode = true
-	m.prereqIndex = idx
-	m.prereqChosen = make(map[string]bool)
-	for _, prerequisite := range m.char.Spells[idx].Prerequisites {
-		m.prereqChosen[prerequisite] = true
-	}
-	m.pickOptions = m.pickOptions[:0]
-	for i, spell := range m.char.Spells {
-		if i == idx || spell.Name == "" {
-			continue
-		}
-		m.pickOptions = append(m.pickOptions, spell.Name)
-	}
-	m.pickSelected = 0
-}
-
-func (m Model) handlePrereqKey(key string) (tea.Model, tea.Cmd) {
-	switch key {
-	case keyEsc:
-		m.prereqMode = false
-	case keyUp, keyVimUp:
-		if m.pickSelected > 0 {
-			m.pickSelected--
-		}
-	case keyDown, keyVimDown:
-		if m.pickSelected < len(m.pickOptions)-1 {
-			m.pickSelected++
-		}
-	case keySpace:
-		if len(m.pickOptions) > 0 {
-			name := m.pickOptions[m.pickSelected]
-			m.prereqChosen[name] = !m.prereqChosen[name]
-		}
-	case keyEnter:
-		// Write chosen spells back in grimoire (pickOptions) order for stable display.
-		var prereqs []string
-		for _, name := range m.pickOptions {
-			if m.prereqChosen[name] {
-				prereqs = append(prereqs, name)
-			}
-		}
-		if m.prereqIndex >= 0 && m.prereqIndex < len(m.char.Spells) {
-			m.char.Spells[m.prereqIndex].Prerequisites = prereqs
-		}
-		m.prereqMode = false
-		m.autoSave()
-	}
-	return m, nil
 }
 
 // cycleEnum returns the option after cur (dir +1) or before it (dir -1), wrapping around.
@@ -1659,300 +843,4 @@ func atoiOr(s string, def int) int {
 		return n
 	}
 	return def
-}
-
-// Item edit modal.
-
-// Item edit modal field indices. Which fields are shown depends on the item's
-// Category (see itemFieldVisible).
-const (
-	itemFieldName = iota
-	itemFieldWeight
-	itemFieldCategory
-	itemFieldRating     // armor + helmet
-	itemFieldBaneSneak  // armor
-	itemFieldBaneEvade  // armor
-	itemFieldBaneAcro   // armor
-	itemFieldBaneAware  // helmet
-	itemFieldBaneRanged // helmet
-	itemFieldGrip       // weapon
-	itemFieldRange      // weapon
-	itemFieldDamage     // weapon
-	itemFieldDur        // weapon
-	itemFieldFeatures   // weapon
-	itemFieldCount
-)
-
-// itemCategoryOrder is the cycle order for the category enum field.
-var itemCategoryOrder = []model.ItemCategory{
-	model.ItemCategoryGeneric, model.ItemCategoryArmor, model.ItemCategoryHelmet, model.ItemCategoryWeapon,
-}
-
-// itemFieldVisible reports whether a modal field applies to the given category.
-func itemFieldVisible(fieldIdx int, cat model.ItemCategory) bool {
-	switch fieldIdx {
-	case itemFieldName, itemFieldWeight, itemFieldCategory:
-		return true
-	case itemFieldRating:
-		return cat == model.ItemCategoryArmor || cat == model.ItemCategoryHelmet
-	case itemFieldBaneSneak, itemFieldBaneEvade, itemFieldBaneAcro:
-		return cat == model.ItemCategoryArmor
-	case itemFieldBaneAware, itemFieldBaneRanged:
-		return cat == model.ItemCategoryHelmet
-	case itemFieldGrip, itemFieldRange, itemFieldDamage, itemFieldDur, itemFieldFeatures:
-		return cat == model.ItemCategoryWeapon
-	}
-	return false
-}
-
-func (m *Model) startItemEdit(it *model.Item) {
-	if it.Weight < 1 {
-		it.Weight = 1 // items weigh at least 1 slot; only tiny items are weightless
-	}
-	m.itemMode = true
-	m.itemTarget = it
-	m.itemActive = itemFieldName
-	m.syncItemFocus()
-}
-
-// syncItemFocus focuses the text input for the active field (none for the enum or
-// bool fields) and seeds it from the item's current value.
-func (m *Model) syncItemFocus() {
-	m.itemName.Blur()
-	m.itemWeight.Blur()
-	m.itemRating.Blur()
-	m.itemRange.Blur()
-	m.itemDamage.Blur()
-	m.itemDur.Blur()
-	m.itemFeatures.Blur()
-	item := m.itemTarget
-	if item == nil {
-		return
-	}
-	focus := func(ti *textinput.Model, v string) {
-		ti.SetValue(v)
-		ti.CursorEnd()
-		ti.Focus()
-	}
-	switch m.itemActive {
-	case itemFieldName:
-		focus(&m.itemName, item.Name)
-	case itemFieldWeight:
-		focus(&m.itemWeight, strconv.Itoa(item.Weight))
-	case itemFieldRating:
-		focus(&m.itemRating, strconv.Itoa(item.ArmorRating))
-	case itemFieldRange:
-		focus(&m.itemRange, strconv.Itoa(item.Range))
-	case itemFieldDamage:
-		focus(&m.itemDamage, item.Damage)
-	case itemFieldDur:
-		focus(&m.itemDur, strconv.Itoa(item.Durability))
-	case itemFieldFeatures:
-		focus(&m.itemFeatures, strings.Join(item.Features, ", "))
-	}
-}
-
-func (m *Model) commitCurrentItemField() {
-	item := m.itemTarget
-	if item == nil {
-		return
-	}
-	switch m.itemActive {
-	case itemFieldName:
-		item.Name = m.itemName.Value()
-	case itemFieldWeight:
-		item.Weight = max(1, atoiOr(m.itemWeight.Value(), 1))
-	case itemFieldRating:
-		item.ArmorRating = max(0, atoiOr(m.itemRating.Value(), 0))
-	case itemFieldRange:
-		item.Range = max(0, atoiOr(m.itemRange.Value(), 0))
-	case itemFieldDamage:
-		item.Damage = m.itemDamage.Value()
-	case itemFieldDur:
-		item.Durability = max(0, atoiOr(m.itemDur.Value(), 0))
-	case itemFieldFeatures:
-		item.Features = splitCSV(m.itemFeatures.Value())
-	}
-}
-
-func (m *Model) closeItemEdit() {
-	m.itemMode = false
-	m.itemTarget = nil
-	m.itemName.Blur()
-	m.itemWeight.Blur()
-	m.itemRating.Blur()
-	m.itemRange.Blur()
-	m.itemDamage.Blur()
-	m.itemDur.Blur()
-	m.itemFeatures.Blur()
-}
-
-// stepItemField moves dir (±1) to the next field visible for the item's category,
-// wrapping around.
-func (m *Model) stepItemField(active, dir int) int {
-	cat := model.ItemCategoryGeneric
-	if m.itemTarget != nil {
-		cat = m.itemTarget.Category
-	}
-	for i := 1; i <= itemFieldCount; i++ {
-		cand := ((active+dir*i)%itemFieldCount + itemFieldCount) % itemFieldCount
-		if itemFieldVisible(cand, cat) {
-			return cand
-		}
-	}
-	return active
-}
-
-// cycleItemCategory changes the item's category and clears stats that no longer apply.
-func (m *Model) cycleItemCategory(dir int) {
-	item := m.itemTarget
-	if item == nil {
-		return
-	}
-	cur := 0
-	for i, category := range itemCategoryOrder {
-		if category == item.Category {
-			cur = i
-			break
-		}
-	}
-	n := len(itemCategoryOrder)
-	item.Category = itemCategoryOrder[((cur+dir)%n+n)%n]
-	normalizeItemStats(item)
-}
-
-func (m *Model) cycleGrip(dir int) {
-	item := m.itemTarget
-	if item == nil {
-		return
-	}
-	cur := 0
-	for i, grip := range model.AllGrips {
-		if grip == item.Grip {
-			cur = i
-			break
-		}
-	}
-	n := len(model.AllGrips)
-	item.Grip = model.AllGrips[((cur+dir)%n+n)%n]
-}
-
-// toggleItemBane toggles the bane for the active field, reporting whether the
-// active field was a bane (so other keys can fall through).
-func (m *Model) toggleItemBane() bool {
-	item := m.itemTarget
-	if item == nil {
-		return false
-	}
-	switch m.itemActive {
-	case itemFieldBaneSneak:
-		item.BaneToSneaking = !item.BaneToSneaking
-	case itemFieldBaneEvade:
-		item.BaneToEvade = !item.BaneToEvade
-	case itemFieldBaneAcro:
-		item.BaneToAcrobatics = !item.BaneToAcrobatics
-	case itemFieldBaneAware:
-		item.BaneToAwareness = !item.BaneToAwareness
-	case itemFieldBaneRanged:
-		item.BaneToRanged = !item.BaneToRanged
-	default:
-		return false
-	}
-	return true
-}
-
-// normalizeItemStats zeroes stat fields that do not belong to the item's category
-// so stale values from a previous category never persist.
-func normalizeItemStats(item *model.Item) {
-	clearWeapon := func() {
-		item.Grip = ""
-		item.Range = 0
-		item.Damage = ""
-		item.Durability = 0
-		item.Features = nil
-	}
-	clearArmorBanes := func() { item.BaneToSneaking, item.BaneToEvade, item.BaneToAcrobatics = false, false, false }
-	clearHelmetBanes := func() { item.BaneToAwareness, item.BaneToRanged = false, false }
-	switch item.Category {
-	case model.ItemCategoryArmor:
-		clearHelmetBanes()
-		clearWeapon()
-	case model.ItemCategoryHelmet:
-		clearArmorBanes()
-		clearWeapon()
-	case model.ItemCategoryWeapon:
-		item.ArmorRating = 0
-		clearArmorBanes()
-		clearHelmetBanes()
-		if item.Grip == "" {
-			item.Grip = model.Grip1H
-		}
-	default: // CatNone
-		item.ArmorRating = 0
-		clearArmorBanes()
-		clearHelmetBanes()
-		clearWeapon()
-	}
-}
-
-func (m Model) handleItemKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
-	key := msg.String()
-	if key == keyQuit {
-		return m, tea.Quit
-	}
-	// Enum fields are cycled with the arrows; they are not text inputs.
-	if key == keyLeft || key == keyRight {
-		switch m.itemActive {
-		case itemFieldCategory:
-			m.cycleItemCategory(arrowSign(key))
-			m.autoSave()
-			return m, nil
-		case itemFieldGrip:
-			m.cycleGrip(arrowSign(key))
-			m.autoSave()
-			return m, nil
-		}
-	}
-	if key == keySpace && m.toggleItemBane() {
-		m.autoSave()
-		return m, nil
-	}
-	switch key {
-	case keyEnter, keyEsc:
-		m.commitCurrentItemField()
-		m.closeItemEdit()
-		m.rebuildFields()
-		m.clampFocus()
-		m.autoSave()
-		return m, nil
-	case keyDown:
-		m.commitCurrentItemField()
-		m.itemActive = m.stepItemField(m.itemActive, +1)
-		m.syncItemFocus()
-		return m, textinput.Blink
-	case keyUp:
-		m.commitCurrentItemField()
-		m.itemActive = m.stepItemField(m.itemActive, -1)
-		m.syncItemFocus()
-		return m, textinput.Blink
-	default:
-		var cmd tea.Cmd
-		switch m.itemActive {
-		case itemFieldName:
-			m.itemName, cmd = m.itemName.Update(msg)
-		case itemFieldWeight:
-			m.itemWeight, cmd = m.itemWeight.Update(msg)
-		case itemFieldRating:
-			m.itemRating, cmd = m.itemRating.Update(msg)
-		case itemFieldRange:
-			m.itemRange, cmd = m.itemRange.Update(msg)
-		case itemFieldDamage:
-			m.itemDamage, cmd = m.itemDamage.Update(msg)
-		case itemFieldDur:
-			m.itemDur, cmd = m.itemDur.Update(msg)
-		case itemFieldFeatures:
-			m.itemFeatures, cmd = m.itemFeatures.Update(msg)
-		}
-		return m, cmd
-	}
 }

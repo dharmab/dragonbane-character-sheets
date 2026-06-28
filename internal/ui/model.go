@@ -55,7 +55,7 @@ func heroicOrder(c *model.Character) []heroicEntry {
 		entries = append(entries, heroicEntry{idKinAbility(i), ability.Name})
 	}
 	for i, ability := range c.HeroicAbilities {
-		entries = append(entries, heroicEntry{idHab(i), ability.Name})
+		entries = append(entries, heroicEntry{idHeroicAbility(i), ability.Name})
 	}
 	slices.SortStableFunc(entries, func(a, b heroicEntry) int {
 		return strings.Compare(strings.ToLower(a.name), strings.ToLower(b.name))
@@ -73,91 +73,91 @@ const (
 	kindLabel // non-interactive; navigation only
 )
 
-// fieldFamily identifies the kind of thing a focusable field is. Together with an
-// index (for the repeated families like skills or inventory rows) it forms a
-// fieldID — the typed replacement for the old string labels. Singleton families
+// fieldGroup identifies the kind of thing a focusable field is. Together with an
+// index (for the repeated groups like skills or inventory rows) it forms a
+// fieldID — the typed replacement for the old string labels. Singleton groups
 // ignore the index.
-type fieldFamily int
+type fieldGroup int
 
 const (
-	famNone fieldFamily = iota // zero value: not a field (gap placeholder)
-	famName
-	famAge
-	famKin
-	famProfession
-	famAttr // index → model.AttributeOrder
-	famCurrentHP
-	famCurrentWP
-	famWeaknessName
-	famRestRound
-	famRestStretch
-	famCondition  // index → conditionOrder
-	famSkillLevel // index → model.Skills
-	famSkillAdv   // index → model.Skills
-	famArmor
-	famHelmet
-	famWeaponAtHand // index → model.WeaponsAtHand
-	famWeaponDur    // index → model.WeaponsAtHand
-	famInvName      // index → model.Inventory
-	famInvWeight    // index → model.Inventory
-	famInvEmpty
-	famTiny // index → model.TinyItems
-	famTinyEmpty
-	famKinAbility // index → KinAbilities(model.Kin)
-	famHab        // index → model.HeroicAbilities
-	famHabEmpty
-	famMagicSkillLevel // index → model.MagicSkills
-	famMagicSkillAdv   // index → model.MagicSkills
-	famMagicEmpty
-	famPreparedSpell // index → model.PreparedSpells()
-	famPreparedTrick // index → model.MagicTricks (always castable; no slot)
-	famPreparedEmpty
+	groupNone fieldGroup = iota // zero value: not a field (gap placeholder)
+	groupName
+	groupAge
+	groupKin
+	groupProfession
+	groupAttribute // index → model.AttributeOrder
+	groupCurrentHP
+	groupCurrentWP
+	groupWeaknessName
+	groupRestRound
+	groupRestStretch
+	groupCondition  // index → conditionOrder
+	groupSkillLevel // index → model.Skills
+	groupSkillAdvanced   // index → model.Skills
+	groupArmor
+	groupHelmet
+	groupWeaponAtHand // index → model.WeaponsAtHand
+	groupWeaponDurability    // index → model.WeaponsAtHand
+	groupInventoryName      // index → model.Inventory
+	groupInventoryWeight    // index → model.Inventory
+	groupInventoryEmpty
+	groupTinyItem // index → model.TinyItems
+	groupTinyEmpty
+	groupKinAbility // index → KinAbilities(model.Kin)
+	groupHeroicAbility        // index → model.HeroicAbilities
+	groupHeroicAbilityEmpty
+	groupMagicSkillLevel // index → model.MagicSkills
+	groupMagicSkillAdvanced   // index → model.MagicSkills
+	groupMagicEmpty
+	groupPreparedSpell // index → model.PreparedSpells()
+	groupPreparedTrick // index → model.MagicTricks (always castable; no slot)
+	groupPreparedEmpty
 )
 
 // fieldID names a focusable field structurally. It is comparable, so it doubles
 // as a map key and supports == directly — no string parsing, no fmt.Sscanf.
 type fieldID struct {
-	family fieldFamily
+	group fieldGroup
 	index  int
 }
 
-// Constructors for the singleton and indexed field families, so layout and
+// Constructors for the singleton and indexed field groups, so layout and
 // rendering refer to fields by typed value instead of formatted strings.
 var (
-	idName          = fieldID{family: famName}
-	idAge           = fieldID{family: famAge}
-	idKin           = fieldID{family: famKin}
-	idProfession    = fieldID{family: famProfession}
-	idCurrentHP     = fieldID{family: famCurrentHP}
-	idCurrentWP     = fieldID{family: famCurrentWP}
-	idWeaknessName  = fieldID{family: famWeaknessName}
-	idRestRound     = fieldID{family: famRestRound}
-	idRestStretch   = fieldID{family: famRestStretch}
-	idArmor         = fieldID{family: famArmor}
-	idHelmet        = fieldID{family: famHelmet}
-	idInvEmpty      = fieldID{family: famInvEmpty}
-	idTinyEmpty     = fieldID{family: famTinyEmpty}
-	idHabEmpty      = fieldID{family: famHabEmpty}
-	idMagicEmpty    = fieldID{family: famMagicEmpty}
-	idPreparedEmpty = fieldID{family: famPreparedEmpty}
+	idName          = fieldID{group: groupName}
+	idAge           = fieldID{group: groupAge}
+	idKin           = fieldID{group: groupKin}
+	idProfession    = fieldID{group: groupProfession}
+	idCurrentHP     = fieldID{group: groupCurrentHP}
+	idCurrentWP     = fieldID{group: groupCurrentWP}
+	idWeaknessName  = fieldID{group: groupWeaknessName}
+	idRestRound     = fieldID{group: groupRestRound}
+	idRestStretch   = fieldID{group: groupRestStretch}
+	idArmor         = fieldID{group: groupArmor}
+	idHelmet        = fieldID{group: groupHelmet}
+	idInventoryEmpty      = fieldID{group: groupInventoryEmpty}
+	idTinyEmpty     = fieldID{group: groupTinyEmpty}
+	idHeroicAbilityEmpty      = fieldID{group: groupHeroicAbilityEmpty}
+	idMagicEmpty    = fieldID{group: groupMagicEmpty}
+	idPreparedEmpty = fieldID{group: groupPreparedEmpty}
 )
 
-func idAttr(i int) fieldID         { return fieldID{famAttr, i} }
-func idCondition(i int) fieldID    { return fieldID{famCondition, i} }
-func idSkillLevel(i int) fieldID   { return fieldID{famSkillLevel, i} }
-func idSkillAdv(i int) fieldID     { return fieldID{famSkillAdv, i} }
-func idWeaponAtHand(i int) fieldID { return fieldID{famWeaponAtHand, i} }
-func idWeaponDur(i int) fieldID    { return fieldID{famWeaponDur, i} }
-func idInvName(i int) fieldID      { return fieldID{famInvName, i} }
-func idInvWeight(i int) fieldID    { return fieldID{famInvWeight, i} }
-func idTiny(i int) fieldID         { return fieldID{famTiny, i} }
-func idKinAbility(i int) fieldID   { return fieldID{famKinAbility, i} }
-func idHab(i int) fieldID          { return fieldID{famHab, i} }
+func idAttribute(i int) fieldID         { return fieldID{groupAttribute, i} }
+func idCondition(i int) fieldID    { return fieldID{groupCondition, i} }
+func idSkillLevel(i int) fieldID   { return fieldID{groupSkillLevel, i} }
+func idSkillAdvanced(i int) fieldID     { return fieldID{groupSkillAdvanced, i} }
+func idWeaponAtHand(i int) fieldID { return fieldID{groupWeaponAtHand, i} }
+func idWeaponDurability(i int) fieldID    { return fieldID{groupWeaponDurability, i} }
+func idInventoryName(i int) fieldID      { return fieldID{groupInventoryName, i} }
+func idInventoryWeight(i int) fieldID    { return fieldID{groupInventoryWeight, i} }
+func idTiny(i int) fieldID         { return fieldID{groupTinyItem, i} }
+func idKinAbility(i int) fieldID   { return fieldID{groupKinAbility, i} }
+func idHeroicAbility(i int) fieldID          { return fieldID{groupHeroicAbility, i} }
 
-func idMagicSkillLevel(i int) fieldID { return fieldID{famMagicSkillLevel, i} }
-func idMagicSkillAdv(i int) fieldID   { return fieldID{famMagicSkillAdv, i} }
-func idPreparedSpell(i int) fieldID   { return fieldID{famPreparedSpell, i} }
-func idPreparedTrick(i int) fieldID   { return fieldID{famPreparedTrick, i} }
+func idMagicSkillLevel(i int) fieldID { return fieldID{groupMagicSkillLevel, i} }
+func idMagicSkillAdvanced(i int) fieldID   { return fieldID{groupMagicSkillAdvanced, i} }
+func idPreparedSpell(i int) fieldID   { return fieldID{groupPreparedSpell, i} }
+func idPreparedTrick(i int) fieldID   { return fieldID{groupPreparedTrick, i} }
 
 type field struct {
 	id      fieldID
@@ -175,17 +175,17 @@ type abilityPick struct {
 }
 
 const (
-	secIdentity   = 0
-	secAttributes = 1
-	secResources  = 2
-	secSkills     = 3
-	secWeakness   = 4
-	secGear       = 5
-	secInventory  = 6
-	secTinyItems  = 7
-	secConditions = 8
-	secHeroic     = 9
-	secMagic      = 10
+	sectionIdentity   = 0
+	sectionAttributes = 1
+	sectionResources  = 2
+	sectionSkills     = 3
+	sectionWeakness   = 4
+	sectionGear       = 5
+	sectionInventory  = 6
+	sectionTinyItems  = 7
+	sectionConditions = 8
+	sectionHeroic     = 9
+	sectionMagic      = 10
 )
 
 // saveState tracks whether the latest in-memory changes have reached disk. It
@@ -320,7 +320,7 @@ type namePick struct {
 // appears on screen. Row/column positions here must match what view.go renders.
 // Both the navigation grid and the renderer are derived from this.
 func visualLayout(c *model.Character) [][]fieldID {
-	gap := fieldID{} // famNone: gap placeholder, never focusable
+	gap := fieldID{} // familyNone: gap placeholder, never focusable
 	// Capacity is a safe over-estimate: identity/attribute/gear rows plus one row
 	// per skill, ability, inventory, and tiny item.
 	rows := make([][]fieldID, 0, 6+len(c.Skills)+len(c.HeroicAbilities)+len(c.Inventory)+len(c.TinyItems))
@@ -330,9 +330,9 @@ func visualLayout(c *model.Character) [][]fieldID {
 		// Attributes (left, cols 0-1), Derived (middle, cols 2-3), Conditions (right, cols 4-5).
 		// Conditions stay in cols 4-5 on every row so vertical navigation lines up; the gaps
 		// are placeholders for the derived column, which only has fields on row 0.
-		[]fieldID{idAttr(0), idAttr(3), idCurrentHP, idCurrentWP, idCondition(0), idCondition(1)},
-		[]fieldID{idAttr(1), idAttr(4), gap, gap, idCondition(2), idCondition(3)},
-		[]fieldID{idAttr(2), idAttr(5), gap, gap, idCondition(4), idCondition(5)},
+		[]fieldID{idAttribute(0), idAttribute(3), idCurrentHP, idCurrentWP, idCondition(0), idCondition(1)},
+		[]fieldID{idAttribute(1), idAttribute(4), gap, gap, idCondition(2), idCondition(3)},
+		[]fieldID{idAttribute(2), idAttribute(5), gap, gap, idCondition(4), idCondition(5)},
 	)
 	var generalIdx, weaponIdx []int
 	for i, skill := range c.Skills {
@@ -348,10 +348,10 @@ func visualLayout(c *model.Character) [][]fieldID {
 		result := make([][]fieldID, 0, nRows)
 		for r := range nRows {
 			a := indices[r]
-			row := []fieldID{idSkillLevel(a), idSkillAdv(a)}
+			row := []fieldID{idSkillLevel(a), idSkillAdvanced(a)}
 			if ri := r + nRows; ri < n {
 				b := indices[ri]
-				row = append(row, idSkillLevel(b), idSkillAdv(b))
+				row = append(row, idSkillLevel(b), idSkillAdvanced(b))
 			}
 			result = append(result, row)
 		}
@@ -360,7 +360,7 @@ func visualLayout(c *model.Character) [][]fieldID {
 	genRows := skillPairRows(generalIdx)
 	weapRows := make([][]fieldID, 0, len(weaponIdx))
 	for _, i := range weaponIdx {
-		weapRows = append(weapRows, []fieldID{idSkillLevel(i), idSkillAdv(i)})
+		weapRows = append(weapRows, []fieldID{idSkillLevel(i), idSkillAdvanced(i)})
 	}
 	for r := range max(len(genRows), len(weapRows)) {
 		var row []fieldID
@@ -381,7 +381,7 @@ func visualLayout(c *model.Character) [][]fieldID {
 		magicSkillRows = append(magicSkillRows, []fieldID{idMagicEmpty})
 	} else {
 		for i := range len(c.MagicSkills) {
-			magicSkillRows = append(magicSkillRows, []fieldID{idMagicSkillLevel(i), idMagicSkillAdv(i)})
+			magicSkillRows = append(magicSkillRows, []fieldID{idMagicSkillLevel(i), idMagicSkillAdvanced(i)})
 		}
 	}
 	// Prepared spells and always-castable magic tricks, sorted alphabetically. If
@@ -403,7 +403,7 @@ func visualLayout(c *model.Character) [][]fieldID {
 		habRows = append(habRows, []fieldID{e.id})
 	}
 	if len(habRows) == 0 {
-		habRows = append(habRows, []fieldID{idHabEmpty})
+		habRows = append(habRows, []fieldID{idHeroicAbilityEmpty})
 	}
 	rows = append(rows, habRows...)
 
@@ -413,20 +413,20 @@ func visualLayout(c *model.Character) [][]fieldID {
 	for i := range 3 {
 		weaponRow := []fieldID{idWeaponAtHand(i)}
 		if i < len(c.Weapons) && c.Weapons[i].Name != "" {
-			weaponRow = append(weaponRow, idWeaponDur(i))
+			weaponRow = append(weaponRow, idWeaponDurability(i))
 		}
 		rows = append(rows, weaponRow)
 	}
 	// Inventory and tiny items rendered side by side.
 	var invRows [][]fieldID
 	if len(c.Inventory) == 0 {
-		invRows = append(invRows, []fieldID{idInvEmpty})
+		invRows = append(invRows, []fieldID{idInventoryEmpty})
 	} else {
 		for i := range len(c.Inventory) {
 			// Weight renders to the left of the name (see viewInventory), so it must
 			// come first here too — visualLayout is the source of truth for left/right
 			// navigation order.
-			invRows = append(invRows, []fieldID{idInvWeight(i), idInvName(i)})
+			invRows = append(invRows, []fieldID{idInventoryWeight(i), idInventoryName(i)})
 		}
 	}
 	var tinyRows [][]fieldID
@@ -447,7 +447,7 @@ func visualLayout(c *model.Character) [][]fieldID {
 // fixed horizontal position — otherwise vertical navigation drifts between columns (it
 // clamps to the shorter row's width). Left rows are assumed uniform in width.
 func zipColumns(left, right [][]fieldID) [][]fieldID {
-	gap := fieldID{} // famNone: never focusable
+	gap := fieldID{} // familyNone: never focusable
 	leftWidth := 0
 	if len(left) > 0 {
 		leftWidth = len(left[0])
@@ -473,47 +473,47 @@ func zipColumns(left, right [][]fieldID) [][]fieldID {
 // metaFor returns the interaction kind and section for a field id.
 func metaFor(id fieldID) field {
 	mk := func(k fieldKind, sec int) field { return field{id: id, kind: k, section: sec} }
-	switch id.family {
-	case famName:
-		return mk(kindText, secIdentity)
-	case famAge, famKin, famProfession:
-		return mk(kindEnum, secIdentity)
-	case famAttr:
-		return mk(kindInt, secAttributes)
-	case famCurrentHP, famCurrentWP:
-		return mk(kindInt, secResources)
-	case famWeaknessName:
-		return mk(kindText, secWeakness)
-	case famRestRound, famRestStretch:
-		return mk(kindBool, secIdentity)
-	case famCondition:
-		return mk(kindBool, secConditions)
-	case famSkillLevel:
-		return mk(kindInt, secSkills)
-	case famSkillAdv:
-		return mk(kindBool, secSkills)
-	case famArmor, famHelmet, famWeaponAtHand:
-		return mk(kindText, secGear)
-	case famWeaponDur:
-		return mk(kindInt, secGear)
-	case famInvName:
-		return mk(kindText, secInventory)
-	case famInvWeight:
-		return mk(kindInt, secInventory)
-	case famInvEmpty:
-		return mk(kindLabel, secInventory)
-	case famTiny:
-		return mk(kindText, secTinyItems)
-	case famTinyEmpty:
-		return mk(kindLabel, secTinyItems)
-	case famKinAbility, famHab, famHabEmpty:
-		return mk(kindLabel, secHeroic)
-	case famMagicSkillLevel:
-		return mk(kindInt, secMagic)
-	case famMagicSkillAdv:
-		return mk(kindBool, secMagic)
-	case famMagicEmpty, famPreparedSpell, famPreparedTrick, famPreparedEmpty:
-		return mk(kindLabel, secMagic)
+	switch id.group {
+	case groupName:
+		return mk(kindText, sectionIdentity)
+	case groupAge, groupKin, groupProfession:
+		return mk(kindEnum, sectionIdentity)
+	case groupAttribute:
+		return mk(kindInt, sectionAttributes)
+	case groupCurrentHP, groupCurrentWP:
+		return mk(kindInt, sectionResources)
+	case groupWeaknessName:
+		return mk(kindText, sectionWeakness)
+	case groupRestRound, groupRestStretch:
+		return mk(kindBool, sectionIdentity)
+	case groupCondition:
+		return mk(kindBool, sectionConditions)
+	case groupSkillLevel:
+		return mk(kindInt, sectionSkills)
+	case groupSkillAdvanced:
+		return mk(kindBool, sectionSkills)
+	case groupArmor, groupHelmet, groupWeaponAtHand:
+		return mk(kindText, sectionGear)
+	case groupWeaponDurability:
+		return mk(kindInt, sectionGear)
+	case groupInventoryName:
+		return mk(kindText, sectionInventory)
+	case groupInventoryWeight:
+		return mk(kindInt, sectionInventory)
+	case groupInventoryEmpty:
+		return mk(kindLabel, sectionInventory)
+	case groupTinyItem:
+		return mk(kindText, sectionTinyItems)
+	case groupTinyEmpty:
+		return mk(kindLabel, sectionTinyItems)
+	case groupKinAbility, groupHeroicAbility, groupHeroicAbilityEmpty:
+		return mk(kindLabel, sectionHeroic)
+	case groupMagicSkillLevel:
+		return mk(kindInt, sectionMagic)
+	case groupMagicSkillAdvanced:
+		return mk(kindBool, sectionMagic)
+	case groupMagicEmpty, groupPreparedSpell, groupPreparedTrick, groupPreparedEmpty:
+		return mk(kindLabel, sectionMagic)
 	default:
 		return field{id: id}
 	}
@@ -525,7 +525,7 @@ func buildFields(c *model.Character) []field {
 	var fields []field
 	for _, row := range layout {
 		for _, id := range row {
-			if id.family == famNone { // gap placeholder; never focusable
+			if id.group == groupNone { // gap placeholder; never focusable
 				continue
 			}
 			if _, ok := seen[id]; ok {
@@ -559,104 +559,104 @@ func buildGrid(c *model.Character, fields []field) [][]int {
 }
 
 func New(c *model.Character, path string) Model {
-	ti := textinput.New()
-	ti.CharLimit = 256
+	textInput := textinput.New()
+	textInput.CharLimit = 256
 
-	wn := textinput.New()
-	wn.CharLimit = 256
-	wn.SetWidth(40)
+	weaknessName := textinput.New()
+	weaknessName.CharLimit = 256
+	weaknessName.SetWidth(40)
 
-	wd := textinput.New()
-	wd.CharLimit = 512
-	wd.SetWidth(60)
+	weaknessDesc := textinput.New()
+	weaknessDesc.CharLimit = 512
+	weaknessDesc.SetWidth(60)
 
-	an := textinput.New()
-	an.CharLimit = 256
-	an.SetWidth(40)
+	abilityName := textinput.New()
+	abilityName.CharLimit = 256
+	abilityName.SetWidth(40)
 
-	ac := textinput.New()
-	ac.CharLimit = 4
-	ac.SetWidth(6)
+	abilityCost := textinput.New()
+	abilityCost.CharLimit = 4
+	abilityCost.SetWidth(6)
 
-	ad := textinput.New()
-	ad.CharLimit = 512
-	ad.SetWidth(60)
+	abilityDesc := textinput.New()
+	abilityDesc.CharLimit = 512
+	abilityDesc.SetWidth(60)
 
-	sn := textinput.New()
-	sn.CharLimit = 256
-	sn.SetWidth(40)
+	spellName := textinput.New()
+	spellName.CharLimit = 256
+	spellName.SetWidth(40)
 
-	sr := textinput.New()
-	sr.CharLimit = 4
-	sr.SetWidth(6)
+	spellRank := textinput.New()
+	spellRank.CharLimit = 4
+	spellRank.SetWidth(6)
 
-	srng := textinput.New()
-	srng.CharLimit = 64
-	srng.SetWidth(30)
+	spellRange := textinput.New()
+	spellRange.CharLimit = 64
+	spellRange.SetWidth(30)
 
-	sreq := textinput.New()
-	sreq.CharLimit = 256
-	sreq.SetWidth(40)
+	spellReq := textinput.New()
+	spellReq.CharLimit = 256
+	spellReq.SetWidth(40)
 
-	sd := textinput.New()
-	sd.CharLimit = 512
-	sd.SetWidth(60)
+	spellDesc := textinput.New()
+	spellDesc.CharLimit = 512
+	spellDesc.SetWidth(60)
 
-	tn := textinput.New()
-	tn.CharLimit = 256
-	tn.SetWidth(40)
+	trickName := textinput.New()
+	trickName.CharLimit = 256
+	trickName.SetWidth(40)
 
-	td := textinput.New()
-	td.CharLimit = 512
-	td.SetWidth(60)
+	trickDesc := textinput.New()
+	trickDesc.CharLimit = 512
+	trickDesc.SetWidth(60)
 
-	itName := textinput.New()
-	itName.CharLimit = 256
-	itName.SetWidth(40)
-	itWeight := textinput.New()
-	itWeight.CharLimit = 3
-	itWeight.SetWidth(5)
-	itRating := textinput.New()
-	itRating.CharLimit = 3
-	itRating.SetWidth(5)
-	itRange := textinput.New()
-	itRange.CharLimit = 4
-	itRange.SetWidth(6)
-	itDamage := textinput.New()
-	itDamage.CharLimit = 32
-	itDamage.SetWidth(16)
-	itDur := textinput.New()
-	itDur.CharLimit = 3
-	itDur.SetWidth(5)
-	itFeatures := textinput.New()
-	itFeatures.CharLimit = 256
-	itFeatures.SetWidth(40)
+	itemName := textinput.New()
+	itemName.CharLimit = 256
+	itemName.SetWidth(40)
+	itemWeight := textinput.New()
+	itemWeight.CharLimit = 3
+	itemWeight.SetWidth(5)
+	itemRating := textinput.New()
+	itemRating.CharLimit = 3
+	itemRating.SetWidth(5)
+	itemRange := textinput.New()
+	itemRange.CharLimit = 4
+	itemRange.SetWidth(6)
+	itemDamage := textinput.New()
+	itemDamage.CharLimit = 32
+	itemDamage.SetWidth(16)
+	itemDur := textinput.New()
+	itemDur.CharLimit = 3
+	itemDur.SetWidth(5)
+	itemFeatures := textinput.New()
+	itemFeatures.CharLimit = 256
+	itemFeatures.SetWidth(40)
 
 	m := Model{
 		char:            c,
 		path:            path,
-		weaknessName:    wn,
-		weaknessDesc:    wd,
-		abilityName:     an,
-		abilityCost:     ac,
-		abilityDesc:     ad,
-		spellName:       sn,
-		spellRank:       sr,
-		spellRange:      srng,
-		spellReq:        sreq,
-		spellDesc:       sd,
-		trickName:       tn,
-		trickDesc:       td,
-		itemName:        itName,
-		itemWeight:      itWeight,
-		itemRating:      itRating,
-		itemRange:       itRange,
-		itemDamage:      itDamage,
-		itemDur:         itDur,
-		itemFeatures:    itFeatures,
+		weaknessName:    weaknessName,
+		weaknessDesc:    weaknessDesc,
+		abilityName:     abilityName,
+		abilityCost:     abilityCost,
+		abilityDesc:     abilityDesc,
+		spellName:       spellName,
+		spellRank:       spellRank,
+		spellRange:      spellRange,
+		spellReq:        spellReq,
+		spellDesc:       spellDesc,
+		trickName:       trickName,
+		trickDesc:       trickDesc,
+		itemName:        itemName,
+		itemWeight:      itemWeight,
+		itemRating:      itemRating,
+		itemRange:       itemRange,
+		itemDamage:      itemDamage,
+		itemDur:         itemDur,
+		itemFeatures:    itemFeatures,
 		pickEquipSource: -1,
 	}
-	m.textInput = ti
+	m.textInput = textInput
 	m.rebuildFields()
 	return m
 }
@@ -695,12 +695,12 @@ func (m Model) currentPos() (row, col int) {
 	return 0, 0
 }
 
-func (m *Model) moveGrid(drow, dcol int) {
+func (m *Model) moveGrid(destRow, destCol int) {
 	row, col := m.currentPos()
 
-	if drow != 0 {
+	if destRow != 0 {
 		// Skip over gap placeholder cells (-1) so navigation reaches the next field.
-		for newRow := row + drow; newRow >= 0 && newRow < len(m.grid); newRow += drow {
+		for newRow := row + destRow; newRow >= 0 && newRow < len(m.grid); newRow += destRow {
 			newCol := min(col, len(m.grid[newRow])-1)
 			if fi := m.grid[newRow][newCol]; fi >= 0 {
 				m.focus = fi
@@ -710,12 +710,9 @@ func (m *Model) moveGrid(drow, dcol int) {
 		return
 	}
 
-	// Horizontal navigation stops at visual boundaries — no wrapping. A gap cell means
-	// that column's content lives in a row above it: placeholders always sit below a
-	// shorter column (the derived block beside the attributes, or magic skills beside a
-	// longer prepared-spell list). Jump up into that column rather than skipping past it
-	// to an unrelated neighbor; only a genuinely empty column lets the scan continue.
-	for newCol := col + dcol; newCol >= 0 && newCol < len(m.grid[row]); newCol += dcol {
+	// No horizontal wrap. A gap cell (-1) means the column is shorter than its neighbor;
+	// the real content is above — jump up to it rather than skipping past to an unrelated column.
+	for newCol := col + destCol; newCol >= 0 && newCol < len(m.grid[row]); newCol += destCol {
 		if fi := m.grid[row][newCol]; fi >= 0 {
 			m.focus = fi
 			return
@@ -757,21 +754,21 @@ func toStrings[T ~string](xs []T) []string {
 	return out
 }
 
-func enumFieldFor(fam fieldFamily) (enumField, bool) {
-	switch fam {
-	case famKin:
+func enumFieldFor(group fieldGroup) (enumField, bool) {
+	switch group {
+	case groupKin:
 		return enumField{
 			options: toStrings(model.AllKins),
 			get:     func(c *model.Character) string { return string(c.Kin) },
 			set:     func(c *model.Character, v string) { c.Kin = model.Kin(v) },
 		}, true
-	case famProfession:
+	case groupProfession:
 		return enumField{
 			options: toStrings(model.AllProfessions),
 			get:     func(c *model.Character) string { return string(c.Profession) },
 			set:     func(c *model.Character, v string) { c.Profession = model.Profession(v) },
 		}, true
-	case famAge:
+	case groupAge:
 		return enumField{
 			options: toStrings(model.AllAges),
 			get:     func(c *model.Character) string { return string(c.Age) },
@@ -783,7 +780,7 @@ func enumFieldFor(fam fieldFamily) (enumField, bool) {
 }
 
 func (m Model) enumOptions() (options []string, current int) {
-	ef, ok := enumFieldFor(m.currentField().id.family)
+	ef, ok := enumFieldFor(m.currentField().id.group)
 	if !ok {
 		return nil, 0
 	}
@@ -792,7 +789,7 @@ func (m Model) enumOptions() (options []string, current int) {
 	// The profession picker offers a Custom… entry first; selecting it opens an
 	// inline text editor for a free-form name. A stored value that is not a builtin
 	// is a custom profession, so the cursor lands on the Custom entry.
-	if m.currentField().id.family == famProfession {
+	if m.currentField().id.group == groupProfession {
 		opts := append([]string{customLabel}, ef.options...)
 		current = 0 // Custom… by default (covers empty and custom values)
 		for i, opt := range ef.options {
