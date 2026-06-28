@@ -9,9 +9,10 @@ import (
 	"github.com/dharmab/dragonbane-charsheet/internal/model"
 )
 
-// preparedEntry is one row in the prepared-magic column: a focusable field id paired
-// with the display name used to sort the column.
-type preparedEntry struct {
+// sortedEntry is one display row in a sorted list column: a focusable field id paired
+// with the name used to sort the list. Used by both the prepared-magic column and the
+// heroic-abilities list.
+type sortedEntry struct {
 	id   fieldID
 	name string
 }
@@ -21,26 +22,19 @@ type preparedEntry struct {
 // MagicTricks respectively, so sorting only affects display/navigation order. Both the
 // navigation grid (visualLayout) and the renderer (view.go) use this, keeping them in
 // sync.
-func preparedColumnOrder(c *model.Character) []preparedEntry {
+func preparedColumnOrder(c *model.Character) []sortedEntry {
 	prepared := c.PreparedSpells()
-	entries := make([]preparedEntry, 0, len(prepared)+len(c.MagicTricks))
+	entries := make([]sortedEntry, 0, len(prepared)+len(c.MagicTricks))
 	for i, spell := range prepared {
-		entries = append(entries, preparedEntry{id: idPreparedSpell(i), name: spell.Name})
+		entries = append(entries, sortedEntry{id: idPreparedSpell(i), name: spell.Name})
 	}
 	for i, trick := range c.MagicTricks {
-		entries = append(entries, preparedEntry{id: idPreparedTrick(i), name: trick.Name})
+		entries = append(entries, sortedEntry{id: idPreparedTrick(i), name: trick.Name})
 	}
-	slices.SortStableFunc(entries, func(a, b preparedEntry) int {
+	slices.SortStableFunc(entries, func(a, b sortedEntry) int {
 		return strings.Compare(strings.ToLower(a.name), strings.ToLower(b.name))
 	})
 	return entries
-}
-
-// heroicEntry is one row in the heroic-abilities list: a focusable field id paired
-// with the name used to sort the list.
-type heroicEntry struct {
-	id   fieldID
-	name string
 }
 
 // heroicOrder returns all heroic abilities — kin-granted and chosen together — as
@@ -48,16 +42,16 @@ type heroicEntry struct {
 // KinAbilities(Kin) / HeroicAbilities by index, so sorting only affects
 // display/navigation order. Both visualLayout and view.go use this, keeping the
 // grid and the renderer in sync.
-func heroicOrder(c *model.Character) []heroicEntry {
+func heroicOrder(c *model.Character) []sortedEntry {
 	kin := model.KinAbilities(c.Kin)
-	entries := make([]heroicEntry, 0, len(kin)+len(c.HeroicAbilities))
+	entries := make([]sortedEntry, 0, len(kin)+len(c.HeroicAbilities))
 	for i, ability := range kin {
-		entries = append(entries, heroicEntry{idKinAbility(i), ability.Name})
+		entries = append(entries, sortedEntry{idKinAbility(i), ability.Name})
 	}
 	for i, ability := range c.HeroicAbilities {
-		entries = append(entries, heroicEntry{idHeroicAbility(i), ability.Name})
+		entries = append(entries, sortedEntry{idHeroicAbility(i), ability.Name})
 	}
-	slices.SortStableFunc(entries, func(a, b heroicEntry) int {
+	slices.SortStableFunc(entries, func(a, b sortedEntry) int {
 		return strings.Compare(strings.ToLower(a.name), strings.ToLower(b.name))
 	})
 	return entries
@@ -175,17 +169,17 @@ type abilityPick struct {
 }
 
 const (
-	sectionIdentity   = 0
-	sectionAttributes = 1
-	sectionResources  = 2
-	sectionSkills     = 3
-	sectionWeakness   = 4
-	sectionGear       = 5
-	sectionInventory  = 6
-	sectionTinyItems  = 7
-	sectionConditions = 8
-	sectionHeroic     = 9
-	sectionMagic      = 10
+	sectionIdentity = iota
+	sectionAttributes
+	sectionResources
+	sectionSkills
+	sectionWeakness
+	sectionGear
+	sectionInventory
+	sectionTinyItems
+	sectionConditions
+	sectionHeroic
+	sectionMagic
 )
 
 // saveState tracks whether the latest in-memory changes have reached disk. It
@@ -344,10 +338,8 @@ type namePick struct {
 // appears on screen. Row/column positions here must match what view.go renders.
 // Both the navigation grid and the renderer are derived from this.
 func visualLayout(c *model.Character) [][]fieldID {
-	gap := fieldID{} // familyNone: gap placeholder, never focusable
-	// Capacity is a safe over-estimate: identity/attribute/gear rows plus one row
-	// per skill, ability, inventory, and tiny item.
-	rows := make([][]fieldID, 0, 6+len(c.Skills)+len(c.HeroicAbilities)+len(c.Inventory)+len(c.TinyItems))
+	gap := fieldID{} // groupNone: gap placeholder, never focusable
+	rows := make([][]fieldID, 0, 4+len(c.Skills)+len(c.HeroicAbilities)+len(c.Inventory)+len(c.TinyItems))
 	rows = append(rows,
 		// Identity row
 		[]fieldID{idName, idAge, idKin, idProfession, idWeaknessName, idRestRound, idRestStretch},
@@ -358,6 +350,17 @@ func visualLayout(c *model.Character) [][]fieldID {
 		[]fieldID{idAttribute(1), idAttribute(4), gap, gap, idCondition(2), idCondition(3)},
 		[]fieldID{idAttribute(2), idAttribute(5), gap, gap, idCondition(4), idCondition(5)},
 	)
+	rows = append(rows, buildSkillRows(c)...)
+	rows = append(rows, buildMagicRows(c)...)
+	rows = append(rows, buildHeroicRows(c)...)
+	rows = append(rows, buildGearRows(c)...)
+	rows = append(rows, buildInventoryRows(c)...)
+	return rows
+}
+
+// buildSkillRows lays out the Skills section: general skills paired two-per-row on the
+// left, weapon skills one-per-row on the right.
+func buildSkillRows(c *model.Character) [][]fieldID {
 	var generalIdx, weaponIdx []int
 	for i, skill := range c.Skills {
 		if skill.IsWeaponSkill {
@@ -386,6 +389,7 @@ func visualLayout(c *model.Character) [][]fieldID {
 	for _, i := range weaponIdx {
 		weapRows = append(weapRows, []fieldID{idSkillLevel(i), idSkillAdvanced(i)})
 	}
+	rows := make([][]fieldID, 0, max(len(genRows), len(weapRows)))
 	for r := range max(len(genRows), len(weapRows)) {
 		var row []fieldID
 		if r < len(genRows) {
@@ -396,10 +400,12 @@ func visualLayout(c *model.Character) [][]fieldID {
 		}
 		rows = append(rows, row)
 	}
+	return rows
+}
 
-	// Magic section (after skills). Two columns rendered side by side, like
-	// inventory/tiny items: known magic skills on the left (level + advancement), the
-	// prepared spells on the right.
+// buildMagicRows lays out the Magic section: known magic skills on the left (level +
+// advancement), prepared spells and always-castable tricks sorted alphabetically on the right.
+func buildMagicRows(c *model.Character) [][]fieldID {
 	var magicSkillRows [][]fieldID
 	if len(c.MagicSkills) == 0 {
 		magicSkillRows = append(magicSkillRows, []fieldID{idMagicEmpty})
@@ -408,8 +414,6 @@ func visualLayout(c *model.Character) [][]fieldID {
 			magicSkillRows = append(magicSkillRows, []fieldID{idMagicSkillLevel(i), idMagicSkillAdvanced(i)})
 		}
 	}
-	// Prepared spells and always-castable magic tricks, sorted alphabetically. If
-	// neither exists, a single placeholder row.
 	var preparedRows [][]fieldID
 	for _, e := range preparedColumnOrder(c) {
 		preparedRows = append(preparedRows, []fieldID{e.id})
@@ -417,23 +421,26 @@ func visualLayout(c *model.Character) [][]fieldID {
 	if len(preparedRows) == 0 {
 		preparedRows = append(preparedRows, []fieldID{idPreparedEmpty})
 	}
-	rows = append(rows, zipColumns(magicSkillRows, preparedRows)...)
+	return zipColumns(magicSkillRows, preparedRows)
+}
 
-	// Heroic abilities section (after magic, before gear). One focusable row per
-	// ability: kin-granted abilities (read-only) first, then chosen ones. Each row is a
-	// single field; enter shows the description (kin: read-only detail, chosen: edit modal).
-	var habRows [][]fieldID
+// buildHeroicRows lays out the Heroic Abilities section: one row per ability in
+// alphabetical order. Each row is a single field; enter shows the description.
+func buildHeroicRows(c *model.Character) [][]fieldID {
+	var rows [][]fieldID
 	for _, e := range heroicOrder(c) {
-		habRows = append(habRows, []fieldID{e.id})
+		rows = append(rows, []fieldID{e.id})
 	}
-	if len(habRows) == 0 {
-		habRows = append(habRows, []fieldID{idHeroicAbilityEmpty})
+	if len(rows) == 0 {
+		rows = append(rows, []fieldID{idHeroicAbilityEmpty})
 	}
-	rows = append(rows, habRows...)
+	return rows
+}
 
-	// Gear section. Each slot's name is always focusable; its stat fields appear
-	// only when the slot holds an item (Name != ""). See view.go viewGear.
-	rows = append(rows, []fieldID{idArmor}, []fieldID{idHelmet})
+// buildGearRows lays out the Gear section: armor, helmet, then up to three weapon slots.
+// A weapon slot's durability field appears only when the slot holds an item.
+func buildGearRows(c *model.Character) [][]fieldID {
+	rows := [][]fieldID{{idArmor}, {idHelmet}}
 	for i := range 3 {
 		weaponRow := []fieldID{idWeaponAtHand(i)}
 		if i < len(c.Weapons) && c.Weapons[i].Name != "" {
@@ -441,7 +448,12 @@ func visualLayout(c *model.Character) [][]fieldID {
 		}
 		rows = append(rows, weaponRow)
 	}
-	// Inventory and tiny items rendered side by side.
+	return rows
+}
+
+// buildInventoryRows lays out the Inventory and Tiny Items sections side by side.
+// Weight comes before name within each inventory row (left-to-right navigation order).
+func buildInventoryRows(c *model.Character) [][]fieldID {
 	var invRows [][]fieldID
 	if len(c.Inventory) == 0 {
 		invRows = append(invRows, []fieldID{idInventoryEmpty})
@@ -461,9 +473,7 @@ func visualLayout(c *model.Character) [][]fieldID {
 			tinyRows = append(tinyRows, []fieldID{idTiny(i)})
 		}
 	}
-	rows = append(rows, zipColumns(invRows, tinyRows)...)
-
-	return rows
+	return zipColumns(invRows, tinyRows)
 }
 
 // zipColumns lays two column groups side by side into rows. When one side has fewer rows
@@ -496,48 +506,48 @@ func zipColumns(left, right [][]fieldID) [][]fieldID {
 
 // metaFor returns the interaction kind and section for a field id.
 func metaFor(id fieldID) field {
-	mk := func(k fieldKind, sec int) field { return field{id: id, kind: k, section: sec} }
+	makeField := func(k fieldKind, sec int) field { return field{id: id, kind: k, section: sec} }
 	switch id.group {
 	case groupName:
-		return mk(kindText, sectionIdentity)
+		return makeField(kindText, sectionIdentity)
 	case groupAge, groupKin, groupProfession:
-		return mk(kindEnum, sectionIdentity)
+		return makeField(kindEnum, sectionIdentity)
 	case groupAttribute:
-		return mk(kindInt, sectionAttributes)
+		return makeField(kindInt, sectionAttributes)
 	case groupCurrentHP, groupCurrentWP:
-		return mk(kindInt, sectionResources)
+		return makeField(kindInt, sectionResources)
 	case groupWeaknessName:
-		return mk(kindText, sectionWeakness)
+		return makeField(kindText, sectionWeakness)
 	case groupRestRound, groupRestStretch:
-		return mk(kindBool, sectionIdentity)
+		return makeField(kindBool, sectionIdentity)
 	case groupCondition:
-		return mk(kindBool, sectionConditions)
+		return makeField(kindBool, sectionConditions)
 	case groupSkillLevel:
-		return mk(kindInt, sectionSkills)
+		return makeField(kindInt, sectionSkills)
 	case groupSkillAdvanced:
-		return mk(kindBool, sectionSkills)
+		return makeField(kindBool, sectionSkills)
 	case groupArmor, groupHelmet, groupWeaponAtHand:
-		return mk(kindText, sectionGear)
+		return makeField(kindText, sectionGear)
 	case groupWeaponDurability:
-		return mk(kindInt, sectionGear)
+		return makeField(kindInt, sectionGear)
 	case groupInventoryName:
-		return mk(kindText, sectionInventory)
+		return makeField(kindText, sectionInventory)
 	case groupInventoryWeight:
-		return mk(kindInt, sectionInventory)
+		return makeField(kindInt, sectionInventory)
 	case groupInventoryEmpty:
-		return mk(kindLabel, sectionInventory)
+		return makeField(kindLabel, sectionInventory)
 	case groupTinyItem:
-		return mk(kindText, sectionTinyItems)
+		return makeField(kindText, sectionTinyItems)
 	case groupTinyEmpty:
-		return mk(kindLabel, sectionTinyItems)
+		return makeField(kindLabel, sectionTinyItems)
 	case groupKinAbility, groupHeroicAbility, groupHeroicAbilityEmpty:
-		return mk(kindLabel, sectionHeroic)
+		return makeField(kindLabel, sectionHeroic)
 	case groupMagicSkillLevel:
-		return mk(kindInt, sectionMagic)
+		return makeField(kindInt, sectionMagic)
 	case groupMagicSkillAdvanced:
-		return mk(kindBool, sectionMagic)
+		return makeField(kindBool, sectionMagic)
 	case groupMagicEmpty, groupPreparedSpell, groupPreparedTrick, groupPreparedEmpty:
-		return mk(kindLabel, sectionMagic)
+		return makeField(kindLabel, sectionMagic)
 	default:
 		return field{id: id}
 	}

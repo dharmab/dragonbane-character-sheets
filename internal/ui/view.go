@@ -20,27 +20,37 @@ const (
 	customLabel = "Custom…"
 	checkEmpty  = "[ ]"
 	checkFull   = "[x]"
+
+	// grimoireTrickIndent pads magic trick names to the same column as spell names,
+	// which are preceded by " [x] " (5 characters of checkbox and surrounding spaces).
+	grimoireTrickIndent = "     "
 )
 
 var (
 	colorHeader = lipgloss.Color("214") // orange section headers
+	styleHeader = lipgloss.NewStyle().Bold(true).Foreground(colorHeader)
+
 	colorDim    = lipgloss.Color("240") // dividers, hints, secondary text
-	colorEdit   = lipgloss.Color("118") // active inline text input
-	colorWarn   = lipgloss.Color("196") // unmet requirements, over-capacity
+	styleDim    = lipgloss.NewStyle().Foreground(colorDim)
+	styleColumn = lipgloss.NewStyle().Foreground(colorDim)
+
+	colorEdit = lipgloss.Color("118") // active inline text input
+	styleEdit = lipgloss.NewStyle().Bold(true).Foreground(colorEdit)
+
+	colorWarn = lipgloss.Color("196") // unmet requirements, over-capacity
+	styleWarn = lipgloss.NewStyle().Foreground(colorWarn)
+
+	// Selection uses reverse video rather than brackets: brackets change field width,
+	// shifting every field to the right of the selection out of alignment.
+	styleSelected = lipgloss.NewStyle().Reverse(true).Bold(true)
 )
 
-var (
-	styleHeader = lipgloss.NewStyle().Bold(true).Foreground(colorHeader)
-	styleDim    = lipgloss.NewStyle().Foreground(colorDim)
-	// Selection is shown as a reverse-video highlight rather than added "[ … ]"
-	// brackets: brackets change the character count, which shifts every field to
-	// the right of the selection out of alignment. Reverse video marks the field
-	// in place without changing its width.
-	styleSelected = lipgloss.NewStyle().Reverse(true).Bold(true)
-	styleEdit     = lipgloss.NewStyle().Bold(true).Foreground(colorEdit)
-	styleColumn   = lipgloss.NewStyle().Foreground(colorDim)
-	styleWarn     = lipgloss.NewStyle().Foreground(colorWarn)
-)
+// secChunk pairs rendered text with the section constants it covers, so the scroll
+// logic in render() can find which chunk the focused field lives in.
+type secChunk struct {
+	text string
+	secs []int
+}
 
 func (m Model) View() tea.View {
 	v := tea.NewView(m.render())
@@ -89,12 +99,6 @@ func (m Model) render() string {
 
 	sep := styleDim.Render(strings.Repeat("─", w)) + "\n"
 
-	// secChunk associates rendered text with the section constants it covers, so the
-	// scroll logic can find which chunk the focused field lives in.
-	type secChunk struct {
-		text string
-		secs []int
-	}
 	chunks := []secChunk{
 		{styleHeader.Render(" DRAGONBANE CHARACTER SHEET") + "\n" + sep, nil},
 		{m.viewIdentity() + sep, []int{sectionIdentity, sectionWeakness}},
@@ -237,26 +241,21 @@ func (m Model) viewIdentity() string {
 // 78 is the minimum needed to fit a pair of general skills side by side.
 func column1Width(termW int) int { return max(78, termW/2) }
 
-func (m Model) viewAttrResources(w int) string {
-	// leftWidth=36: first divider (at col leftWidth+1=37) aligns with the inner skill-pair
-	// column split, which sits at col 37 (leading space + 34-wide skill cell + "  │").
-	// midWidth: second divider aligns with the outer general/weapon skill split (col col1W+1).
-	const leftWidth = 36
-	midWidth := column1Width(w) - leftWidth - 3
-
-	attrLines := []string{
+func (m Model) viewAttributeLines() []string {
+	return []string{
 		styleHeader.Render(" ATTRIBUTES"),
 		m.attrRow(0, 3), // STR | INT
 		m.attrRow(1, 4), // CON | WIL
 		m.attrRow(2, 5), // AGL | CHA
 	}
+}
 
+func (m Model) viewDerivedLines() []string {
 	agl := m.char.Attributes[model.AttributeAgility]
 	str := m.char.Attributes[model.AttributeStrength]
 	maxHP := m.char.MaxHP()
 	maxWP := m.char.MaxWP()
-
-	derivedLines := []string{
+	return []string{
 		styleHeader.Render(" DERIVED"),
 		fmt.Sprintf(" HP %s / %d   WP %s / %d",
 			m.formatInt(idCurrentHP, m.char.CurrentHP), maxHP,
@@ -266,19 +265,33 @@ func (m Model) viewAttrResources(w int) string {
 			model.DamageBonus(str),
 			model.DamageBonus(agl)),
 	}
+}
 
-	// Conditions render two per row, in conditionOrder (the same order toggleBool
-	// and visualLayout use): (0,1), (2,3), (4,5).
+// viewConditionLines renders conditions two per row, in conditionOrder: (0,1), (2,3), (4,5).
+func (m Model) viewConditionLines() []string {
 	condLeft := lipgloss.NewStyle().Width(16)
-	condLines := make([]string, 0, 1+len(conditionOrder)/2)
-	condLines = append(condLines, styleHeader.Render(" CONDITIONS"))
+	lines := make([]string, 0, 1+len(conditionOrder)/2)
+	lines = append(lines, styleHeader.Render(" CONDITIONS"))
 	for r := range len(conditionOrder) / 2 {
 		li, ri := 2*r, 2*r+1
 		lc, rc := conditionOrder[li], conditionOrder[ri]
-		condLines = append(condLines, " "+
+		lines = append(lines, " "+
 			condLeft.Render(m.formatBool(idCondition(li), lc.name, *lc.ptr(m.char)))+
 			m.formatBool(idCondition(ri), rc.name, *rc.ptr(m.char)))
 	}
+	return lines
+}
+
+func (m Model) viewAttrResources(w int) string {
+	// leftWidth=36: first divider (at col leftWidth+1=37) aligns with the inner skill-pair
+	// column split, which sits at col 37 (leading space + 34-wide skill cell + "  │").
+	// midWidth: second divider aligns with the outer general/weapon skill split (col col1W+1).
+	const leftWidth = 36
+	midWidth := column1Width(w) - leftWidth - 3
+
+	attrLines := m.viewAttributeLines()
+	derivedLines := m.viewDerivedLines()
+	condLines := m.viewConditionLines()
 
 	leftCol := lipgloss.NewStyle().Width(leftWidth)
 	midCol := lipgloss.NewStyle().Width(midWidth)
@@ -811,9 +824,9 @@ func (m Model) viewGrimoire() string {
 			if name == "" {
 				name = unnamed
 			}
-			line := "     " + nameCol.Render(name)
+			line := grimoireTrickIndent + nameCol.Render(name)
 			if nSpells+i == m.grimoireSel {
-				line = styleSelected.Render("     " + nameCol.Render(name))
+				line = styleSelected.Render(grimoireTrickIndent + nameCol.Render(name))
 			}
 			b.WriteString(line + "\n")
 		}

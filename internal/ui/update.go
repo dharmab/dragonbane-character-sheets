@@ -472,6 +472,19 @@ func adjustQuantity(name string, dir int) string {
 	return model.ApplyQuantity(base, max(1, qty+dir))
 }
 
+// pickerLen returns the number of rows in the active picker list. Ability and magic
+// pickers use dedicated slices; everything else uses pickOptions.
+func (m Model) pickerLen() int {
+	switch m.activePickerKind {
+	case pickerAbility:
+		return len(m.abilityPicks) // includes unselectable entries so cursor can read them
+	case pickerMagic:
+		return len(m.magicPicks)
+	default:
+		return len(m.pickOptions)
+	}
+}
+
 func (m Model) handlePickerKey(key string) (tea.Model, tea.Cmd) {
 	switch key {
 	case keyEsc, keyQuitAlt:
@@ -483,14 +496,7 @@ func (m Model) handlePickerKey(key string) (tea.Model, tea.Cmd) {
 			m.pickSelected--
 		}
 	case keyDown, keyVimDown:
-		limit := len(m.pickOptions) - 1
-		switch m.activePickerKind {
-		case pickerAbility:
-			limit = len(m.abilityPicks) - 1 // can scroll onto unmet abilities, just not select them
-		case pickerMagic:
-			limit = len(m.magicPicks) - 1
-		}
-		if m.pickSelected < limit {
+		if m.pickSelected < m.pickerLen()-1 {
 			m.pickSelected++
 		}
 	case keyEnter:
@@ -717,13 +723,17 @@ func (m *Model) adjustInt(delta int) {
 	}
 }
 
-// conditionOrder lists the six conditions in the order they appear in
-// visualLayout and on screen, pairing each with its display name and a pointer
-// accessor. It is the single source for both rendering and toggling.
-var conditionOrder = []struct {
+// conditionEntry pairs a condition's display name with a pointer accessor into
+// the character's Conditions struct. It is the single source of truth shared by
+// the renderer (view.go) and the toggler (toggleBool).
+type conditionEntry struct {
 	name string
 	ptr  func(*model.Character) *bool
-}{
+}
+
+// conditionOrder lists the six conditions in the order they appear in
+// visualLayout and on screen. It is the single source for both rendering and toggling.
+var conditionOrder = []conditionEntry{
 	{model.ConditionExhausted, func(c *model.Character) *bool { return &c.Conditions.Exhausted }},
 	{model.ConditionAngry, func(c *model.Character) *bool { return &c.Conditions.Angry }},
 	{model.ConditionSickly, func(c *model.Character) *bool { return &c.Conditions.Sickly }},

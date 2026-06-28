@@ -228,23 +228,34 @@ func (modal editModal) view() string {
 	return b.String()
 }
 
+// --- Text input helpers ---
+
+// newTextInput creates a textinput with the given initial value, character limit, and display width.
+func newTextInput(value string, charLimit, width int) textinput.Model {
+	ti := textinput.New()
+	ti.CharLimit = charLimit
+	ti.SetWidth(width)
+	ti.SetValue(value)
+	return ti
+}
+
+// newFocusedTextInput creates a textinput that is focused with the cursor at the end.
+// Use for the first field in a modal, which receives focus on open.
+func newFocusedTextInput(value string, charLimit, width int) textinput.Model {
+	ti := newTextInput(value, charLimit, width)
+	ti.CursorEnd()
+	ti.Focus()
+	return ti
+}
+
 // --- Per-modal builders ---
 
 // newWeaknessModal builds the edit modal for the character's weakness.
 func newWeaknessModal(m *Model) editModal {
 	w := &m.char.Weakness
 
-	nameInput := textinput.New()
-	nameInput.CharLimit = 256
-	nameInput.SetWidth(40)
-	nameInput.SetValue(w.Name)
-	nameInput.CursorEnd()
-	nameInput.Focus()
-
-	descInput := textinput.New()
-	descInput.CharLimit = 512
-	descInput.SetWidth(60)
-	descInput.SetValue(w.Description)
+	nameInput := newFocusedTextInput(w.Name, 256, 40)
+	descInput := newTextInput(w.Description, 512, 60)
 
 	return editModal{
 		title: "WEAKNESS",
@@ -272,22 +283,9 @@ func newWeaknessModal(m *Model) editModal {
 func newAbilityModal(m *Model, idx int) editModal {
 	a := &m.char.HeroicAbilities[idx]
 
-	nameInput := textinput.New()
-	nameInput.CharLimit = 256
-	nameInput.SetWidth(40)
-	nameInput.SetValue(a.Name)
-	nameInput.CursorEnd()
-	nameInput.Focus()
-
-	costInput := textinput.New()
-	costInput.CharLimit = 4
-	costInput.SetWidth(6)
-	costInput.SetValue(strconv.Itoa(a.WPCost))
-
-	descInput := textinput.New()
-	descInput.CharLimit = 512
-	descInput.SetWidth(60)
-	descInput.SetValue(a.Description)
+	nameInput := newFocusedTextInput(a.Name, 256, 40)
+	costInput := newTextInput(strconv.Itoa(a.WPCost), 4, 6)
+	descInput := newTextInput(a.Description, 512, 60)
 
 	reqLabel := func() string {
 		if label := model.RequirementLabel(a.Requirements); label != "" {
@@ -344,17 +342,8 @@ func newAbilityModal(m *Model, idx int) editModal {
 func newTrickModal(m *Model, idx int) editModal {
 	tr := &m.char.MagicTricks[idx]
 
-	nameInput := textinput.New()
-	nameInput.CharLimit = 256
-	nameInput.SetWidth(40)
-	nameInput.SetValue(tr.Name)
-	nameInput.CursorEnd()
-	nameInput.Focus()
-
-	descInput := textinput.New()
-	descInput.CharLimit = 512
-	descInput.SetWidth(60)
-	descInput.SetValue(tr.Description)
+	nameInput := newFocusedTextInput(tr.Name, 256, 40)
+	descInput := newTextInput(tr.Description, 512, 60)
 
 	return editModal{
 		title: "MAGIC TRICK",
@@ -390,32 +379,11 @@ func newTrickModal(m *Model, idx int) editModal {
 func newSpellModal(m *Model, idx int) editModal {
 	sp := &m.char.Spells[idx]
 
-	nameInput := textinput.New()
-	nameInput.CharLimit = 256
-	nameInput.SetWidth(40)
-	nameInput.SetValue(sp.Name)
-	nameInput.CursorEnd()
-	nameInput.Focus()
-
-	rankInput := textinput.New()
-	rankInput.CharLimit = 4
-	rankInput.SetWidth(6)
-	rankInput.SetValue(strconv.Itoa(sp.Rank))
-
-	rangeInput := textinput.New()
-	rangeInput.CharLimit = 64
-	rangeInput.SetWidth(30)
-	rangeInput.SetValue(sp.Range)
-
-	reqInput := textinput.New()
-	reqInput.CharLimit = 256
-	reqInput.SetWidth(40)
-	reqInput.SetValue(strings.Join(sp.Requirements, ", "))
-
-	descInput := textinput.New()
-	descInput.CharLimit = 512
-	descInput.SetWidth(60)
-	descInput.SetValue(sp.Description)
+	nameInput := newFocusedTextInput(sp.Name, 256, 40)
+	rankInput := newTextInput(strconv.Itoa(sp.Rank), 4, 6)
+	rangeInput := newTextInput(sp.Range, 64, 30)
+	reqInput := newTextInput(strings.Join(sp.Requirements, ", "), 256, 40)
+	descInput := newTextInput(sp.Description, 512, 60)
 
 	prereqLabel := func() string {
 		if len(sp.Prerequisites) > 0 {
@@ -550,42 +518,13 @@ func newItemModal(_ *Model, it *model.Item) editModal {
 		it.Weight = 1 // items weigh at least 1 slot
 	}
 
-	nameInput := textinput.New()
-	nameInput.CharLimit = 256
-	nameInput.SetWidth(40)
-	nameInput.SetValue(it.Name)
-	nameInput.CursorEnd()
-	nameInput.Focus()
-
-	weightInput := textinput.New()
-	weightInput.CharLimit = 3
-	weightInput.SetWidth(5)
-	weightInput.SetValue(strconv.Itoa(it.Weight))
-
-	ratingInput := textinput.New()
-	ratingInput.CharLimit = 3
-	ratingInput.SetWidth(5)
-	ratingInput.SetValue(strconv.Itoa(it.ArmorRating))
-
-	rangeInput := textinput.New()
-	rangeInput.CharLimit = 4
-	rangeInput.SetWidth(6)
-	rangeInput.SetValue(strconv.Itoa(it.Range))
-
-	damageInput := textinput.New()
-	damageInput.CharLimit = 32
-	damageInput.SetWidth(16)
-	damageInput.SetValue(it.Damage)
-
-	durInput := textinput.New()
-	durInput.CharLimit = 3
-	durInput.SetWidth(5)
-	durInput.SetValue(strconv.Itoa(it.Durability))
-
-	featuresInput := textinput.New()
-	featuresInput.CharLimit = 256
-	featuresInput.SetWidth(40)
-	featuresInput.SetValue(strings.Join(it.Features, ", "))
+	nameInput := newFocusedTextInput(it.Name, 256, 40)
+	weightInput := newTextInput(strconv.Itoa(it.Weight), 3, 5)
+	ratingInput := newTextInput(strconv.Itoa(it.ArmorRating), 3, 5)
+	rangeInput := newTextInput(strconv.Itoa(it.Range), 4, 6)
+	damageInput := newTextInput(it.Damage, 32, 16)
+	durInput := newTextInput(strconv.Itoa(it.Durability), 3, 5)
+	featuresInput := newTextInput(strings.Join(it.Features, ", "), 256, 40)
 
 	// Visibility helpers — re-evaluated on each render so changing category live-updates the field list.
 	isArmor := func() bool { return it.Category == model.ItemCategoryArmor }
