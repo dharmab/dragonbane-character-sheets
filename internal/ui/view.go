@@ -116,13 +116,13 @@ func (m Model) render() string {
 	curSec := m.currentField().section
 	var allLines []string
 	focusLine := 0
-	for _, c := range chunks {
-		for _, s := range c.secs {
-			if s == curSec {
+	for _, chunk := range chunks {
+		for _, section := range chunk.secs {
+			if section == curSec {
 				focusLine = len(allLines)
 			}
 		}
-		allLines = append(allLines, strings.Split(strings.TrimRight(c.text, "\n"), "\n")...)
+		allLines = append(allLines, strings.Split(strings.TrimRight(chunk.text, "\n"), "\n")...)
 	}
 
 	join := func(lines []string) string { return strings.Join(lines, "\n") }
@@ -147,18 +147,18 @@ func (m Model) viewAbilityPicker() string {
 	b.WriteString(sDim.Render(strings.Repeat("─", 48)) + "\n")
 	start, end := pickWindow(m.pickSelected, len(m.abilityPicks), m.visibleRows())
 	for i := start; i < end; i++ {
-		p := m.abilityPicks[i]
+		pick := m.abilityPicks[i]
 		switch {
-		case i == m.pickSelected && p.selectable:
-			b.WriteString(sSel.Render("  › "+p.display) + "\n")
-		case i == m.pickSelected && !p.selectable:
+		case i == m.pickSelected && pick.selectable:
+			b.WriteString(sSel.Render("  › "+pick.display) + "\n")
+		case i == m.pickSelected && !pick.selectable:
 			// Cursor can rest here so players can read the requirement, but it stays
 			// dim to signal it cannot be selected.
-			b.WriteString(sDim.Render("  › "+p.display) + "\n")
-		case !p.selectable:
-			b.WriteString(sDim.Render("    "+p.display) + "\n")
+			b.WriteString(sDim.Render("  › "+pick.display) + "\n")
+		case !pick.selectable:
+			b.WriteString(sDim.Render("    "+pick.display) + "\n")
 		default:
-			b.WriteString("    " + p.display + "\n")
+			b.WriteString("    " + pick.display + "\n")
 		}
 	}
 	b.WriteString(sDim.Render(strings.Repeat("─", 48)) + "\n")
@@ -249,8 +249,8 @@ func (m Model) viewWeaknessEdit() string {
 // viewItemEdit renders the item edit modal, showing only the stat fields that
 // apply to the item's current category.
 func (m Model) viewItemEdit() string {
-	it := m.itemTarget
-	if it == nil {
+	item := m.itemTarget
+	if item == nil {
 		return ""
 	}
 	var b strings.Builder
@@ -287,30 +287,30 @@ func (m Model) viewItemEdit() string {
 		b.WriteString(" " + check + "\n")
 	}
 
-	textField(itemFieldName, "Name", it.Name, m.itemName.View())
-	textField(itemFieldWeight, "Weight", strconv.Itoa(it.Weight), m.itemWeight.View())
-	cat := string(it.Category)
+	textField(itemFieldName, "Name", item.Name, m.itemName.View())
+	textField(itemFieldWeight, "Weight", strconv.Itoa(item.Weight), m.itemWeight.View())
+	cat := string(item.Category)
 	if cat == "" {
 		cat = noneLabel
 	}
 	enumField(itemFieldCategory, "Category", cat)
 
-	switch it.Category {
+	switch item.Category {
 	case model.ItemCategoryArmor:
-		textField(itemFieldRating, "Armor Rating", strconv.Itoa(it.ArmorRating), m.itemRating.View())
-		boolField(itemFieldBaneSneak, "Bane on Sneaking", it.BaneToSneaking)
-		boolField(itemFieldBaneEvade, "Bane on Evade", it.BaneToEvade)
-		boolField(itemFieldBaneAcro, "Bane on Acrobatics", it.BaneToAcrobatics)
+		textField(itemFieldRating, "Armor Rating", strconv.Itoa(item.ArmorRating), m.itemRating.View())
+		boolField(itemFieldBaneSneak, "Bane on Sneaking", item.BaneToSneaking)
+		boolField(itemFieldBaneEvade, "Bane on Evade", item.BaneToEvade)
+		boolField(itemFieldBaneAcro, "Bane on Acrobatics", item.BaneToAcrobatics)
 	case model.ItemCategoryHelmet:
-		textField(itemFieldRating, "Armor Rating", strconv.Itoa(it.ArmorRating), m.itemRating.View())
-		boolField(itemFieldBaneAware, "Bane on Awareness", it.BaneToAwareness)
-		boolField(itemFieldBaneRanged, "Bane on Ranged Attacks", it.BaneToRanged)
+		textField(itemFieldRating, "Armor Rating", strconv.Itoa(item.ArmorRating), m.itemRating.View())
+		boolField(itemFieldBaneAware, "Bane on Awareness", item.BaneToAwareness)
+		boolField(itemFieldBaneRanged, "Bane on Ranged Attacks", item.BaneToRanged)
 	case model.ItemCategoryWeapon:
-		enumField(itemFieldGrip, "Grip", dash(string(it.Grip)))
-		textField(itemFieldRange, "Range", strconv.Itoa(it.Range), m.itemRange.View())
-		textField(itemFieldDamage, "Damage", it.Damage, m.itemDamage.View())
-		textField(itemFieldDur, "Durability", strconv.Itoa(it.Durability), m.itemDur.View())
-		textField(itemFieldFeatures, "Features", strings.Join(it.Features, ", "), m.itemFeatures.View())
+		enumField(itemFieldGrip, "Grip", dash(string(item.Grip)))
+		textField(itemFieldRange, "Range", strconv.Itoa(item.Range), m.itemRange.View())
+		textField(itemFieldDamage, "Damage", item.Damage, m.itemDamage.View())
+		textField(itemFieldDur, "Durability", strconv.Itoa(item.Durability), m.itemDur.View())
+		textField(itemFieldFeatures, "Features", strings.Join(item.Features, ", "), m.itemFeatures.View())
 	case model.ItemCategoryGeneric: // uncategorized: no extra fields
 	}
 
@@ -438,8 +438,8 @@ func (m Model) viewSkills(w int) string {
 	}
 
 	var general, weapon []int
-	for i, sk := range m.char.Skills {
-		if sk.IsWeaponSkill {
+	for i, skill := range m.char.Skills {
+		if skill.IsWeaponSkill {
 			weapon = append(weapon, i)
 		} else {
 			general = append(general, i)
@@ -606,12 +606,12 @@ func (m Model) viewInventory() string {
 		// rest of the row.
 		wtCol := lipgloss.NewStyle().Width(2).Align(lipgloss.Right)
 		lines = append(lines, sDim.Render(fmt.Sprintf(" %2s  %s", "Wt", "Item")))
-		for i, it := range m.char.Inventory {
-			name := it.Name
+		for i, item := range m.char.Inventory {
+			name := item.Name
 			if name == "" {
 				name = unnamed
 			}
-			weightCell := wtCol.Render(m.fnum(idInvWeight(i), it.Weight))
+			weightCell := wtCol.Render(m.fnum(idInvWeight(i), item.Weight))
 			lines = append(lines, " "+weightCell+"  "+m.ftext(idInvName(i), name))
 		}
 		lines = append(lines, sDim.Render(" a add   x remove   d don item → gear slot"))
@@ -800,16 +800,16 @@ func (m Model) viewMagic(w int) string {
 		leftLines = append(leftLines, " "+m.ftext(idMagicEmpty, "(none — press 'a' to add)"))
 	} else {
 		leftLines = append(leftLines, sDim.Render(fmt.Sprintf(" %-*s %-3s  %*s  %-3s", nameW, "Name", "Atr", lvlW, "Lvl", "Adv")))
-		for i, sk := range m.char.MagicSkills {
+		for i, skill := range m.char.MagicSkills {
 			adv := checkEmpty
-			if sk.Advanced {
+			if skill.Advanced {
 				adv = checkFull
 			}
 			if m.focused(idMagicSkillAdv(i)) {
 				adv = sSel.Render(adv)
 			}
-			leftLines = append(leftLines, " "+nameCol.Render(sk.Name)+" "+string(sk.Attribute)+"  "+
-				lvlCol.Render(m.fnum(idMagicSkillLevel(i), sk.Level))+"  "+adv)
+			leftLines = append(leftLines, " "+nameCol.Render(skill.Name)+" "+string(skill.Attribute)+"  "+
+				lvlCol.Render(m.fnum(idMagicSkillLevel(i), skill.Level))+"  "+adv)
 		}
 	}
 	leftLines = append(leftLines, sDim.Render(" a add skill   x remove"))
@@ -827,12 +827,12 @@ func (m Model) viewMagic(w int) string {
 	if len(entries) == 0 {
 		rightLines = append(rightLines, " "+m.ftext(idPreparedEmpty, "(none — press 'g' to open grimoire)"))
 	} else {
-		for _, e := range entries {
-			name := e.name
+		for _, entry := range entries {
+			name := entry.name
 			if name == "" {
 				name = unnamed
 			}
-			rightLines = append(rightLines, " "+m.ftext(e.id, name))
+			rightLines = append(rightLines, " "+m.ftext(entry.id, name))
 		}
 	}
 	rightLines = append(rightLines, sDim.Render(" g study/record in grimoire"))
@@ -859,18 +859,18 @@ func (m Model) viewMagicPicker(title string) string {
 	b.WriteString(sDim.Render(strings.Repeat("─", 40)) + "\n")
 	start, end := pickWindow(m.pickSelected, len(m.magicPicks), m.visibleRows())
 	for i := start; i < end; i++ {
-		p := m.magicPicks[i]
+		pick := m.magicPicks[i]
 		switch {
-		case i == m.pickSelected && p.selectable:
-			b.WriteString(sSel.Render("  › "+p.display) + "\n")
-		case i == m.pickSelected && !p.selectable:
+		case i == m.pickSelected && pick.selectable:
+			b.WriteString(sSel.Render("  › "+pick.display) + "\n")
+		case i == m.pickSelected && !pick.selectable:
 			// Cursor can rest here so players can read the entry, but it stays dim to
 			// signal it cannot be selected.
-			b.WriteString(sDim.Render("  › "+p.display) + "\n")
-		case !p.selectable:
-			b.WriteString(sDim.Render("    "+p.display) + "\n")
+			b.WriteString(sDim.Render("  › "+pick.display) + "\n")
+		case !pick.selectable:
+			b.WriteString(sDim.Render("    "+pick.display) + "\n")
 		default:
-			b.WriteString("    " + p.display + "\n")
+			b.WriteString("    " + pick.display + "\n")
 		}
 	}
 	b.WriteString(sDim.Render(strings.Repeat("─", 40)) + "\n")
@@ -899,12 +899,12 @@ func (m Model) viewGrimoire() string {
 	if nSpells == 0 {
 		b.WriteString(sDim.Render(" (no spells — press 'a' to record one)") + "\n")
 	} else {
-		for i, sp := range m.char.Spells {
+		for i, spell := range m.char.Spells {
 			box := checkEmpty
-			if sp.Prepared {
+			if spell.Prepared {
 				box = checkFull
 			}
-			name := sp.Name
+			name := spell.Name
 			if name == "" {
 				name = unnamed
 			}
@@ -920,8 +920,8 @@ func (m Model) viewGrimoire() string {
 	if len(m.char.MagicTricks) == 0 {
 		b.WriteString(sDim.Render(" (none — press 'a' to add)") + "\n")
 	} else {
-		for i, tr := range m.char.MagicTricks {
-			name := tr.Name
+		for i, trick := range m.char.MagicTricks {
+			name := trick.Name
 			if name == "" {
 				name = unnamed
 			}
@@ -939,7 +939,7 @@ func (m Model) viewGrimoire() string {
 }
 
 func (m Model) viewSpellEdit() string {
-	sp := m.char.Spells[m.spellIndex]
+	spell := m.char.Spells[m.spellIndex]
 	var b strings.Builder
 	sep := sDim.Render(strings.Repeat("─", 66))
 	b.WriteString(sHdr.Render(" SPELL") + "\n")
@@ -961,17 +961,17 @@ func (m Model) viewSpellEdit() string {
 		return " " + label + ": " + val + "\n"
 	}
 
-	b.WriteString(textField(spellFieldName, "Name", sp.Name, m.spellName.View()))
-	b.WriteString(enumField(spellFieldSchool, "School", string(sp.School)))
-	b.WriteString(textField(spellFieldRank, "Rank", strconv.Itoa(sp.Rank), m.spellRank.View()))
-	b.WriteString(enumField(spellFieldCasting, "Casting Time", string(sp.CastingTime)))
-	b.WriteString(textField(spellFieldRange, "Range", sp.Range, m.spellRange.View()))
-	b.WriteString(enumField(spellFieldDuration, "Duration", string(sp.Duration)))
-	b.WriteString(textField(spellFieldReq, "Requirements", strings.Join(sp.Requirements, ", "), m.spellReq.View()))
+	b.WriteString(textField(spellFieldName, "Name", spell.Name, m.spellName.View()))
+	b.WriteString(enumField(spellFieldSchool, "School", string(spell.School)))
+	b.WriteString(textField(spellFieldRank, "Rank", strconv.Itoa(spell.Rank), m.spellRank.View()))
+	b.WriteString(enumField(spellFieldCasting, "Casting Time", string(spell.CastingTime)))
+	b.WriteString(textField(spellFieldRange, "Range", spell.Range, m.spellRange.View()))
+	b.WriteString(enumField(spellFieldDuration, "Duration", string(spell.Duration)))
+	b.WriteString(textField(spellFieldReq, "Requirements", strings.Join(spell.Requirements, ", "), m.spellReq.View()))
 
 	prereq := noneLabel
-	if len(sp.Prerequisites) > 0 {
-		prereq = strings.Join(sp.Prerequisites, ", ")
+	if len(spell.Prerequisites) > 0 {
+		prereq = strings.Join(spell.Prerequisites, ", ")
 	}
 	prereqLine := " Prerequisites: " + prereq
 	if m.spellActive == spellFieldPrereq {
@@ -979,7 +979,7 @@ func (m Model) viewSpellEdit() string {
 	}
 	b.WriteString(prereqLine + "\n")
 
-	b.WriteString(textField(spellFieldDesc, "Desc", sp.Description, m.spellDesc.View()))
+	b.WriteString(textField(spellFieldDesc, "Desc", spell.Description, m.spellDesc.View()))
 
 	b.WriteString(sep + "\n")
 	b.WriteString(sDim.Render("  ↑↓ next   ←/→ change enum   enter edit prereqs / done   esc done") + "\n")
@@ -987,7 +987,7 @@ func (m Model) viewSpellEdit() string {
 }
 
 func (m Model) viewTrickEdit() string {
-	tr := m.char.MagicTricks[m.trickIndex]
+	trick := m.char.MagicTricks[m.trickIndex]
 	var b strings.Builder
 	sep := sDim.Render(strings.Repeat("─", 64))
 	b.WriteString(sHdr.Render(" MAGIC TRICK") + "\n")
@@ -996,7 +996,7 @@ func (m Model) viewTrickEdit() string {
 	if m.trickActive == trickFieldName {
 		b.WriteString(" Name: " + sEdit.Render(m.trickName.View()) + "\n")
 	} else {
-		name := tr.Name
+		name := trick.Name
 		if name == "" {
 			name = sDim.Render("(empty)")
 		}
@@ -1004,15 +1004,15 @@ func (m Model) viewTrickEdit() string {
 	}
 
 	if m.trickActive == trickFieldSchool {
-		b.WriteString(sSel.Render(" School: "+string(tr.School)) + "   " + sDim.Render("(←/→ change)") + "\n")
+		b.WriteString(sSel.Render(" School: "+string(trick.School)) + "   " + sDim.Render("(←/→ change)") + "\n")
 	} else {
-		b.WriteString(" School: " + string(tr.School) + "\n")
+		b.WriteString(" School: " + string(trick.School) + "\n")
 	}
 
 	if m.trickActive == trickFieldDesc {
 		b.WriteString(" Desc: " + sEdit.Render(m.trickDesc.View()) + "\n")
 	} else {
-		desc := tr.Description
+		desc := trick.Description
 		if desc == "" {
 			desc = sDim.Render("(empty)")
 		}

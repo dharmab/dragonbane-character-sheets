@@ -21,30 +21,30 @@ func Load(path string) (*Character, error) {
 	if c.Attributes == nil {
 		c.Attributes = make(map[Attribute]int, len(AllAttributes))
 	}
-	for _, a := range AllAttributes {
-		if _, ok := c.Attributes[a]; !ok {
-			c.Attributes[a] = DefaultAttributeValue
+	for _, attr := range AllAttributes {
+		if _, ok := c.Attributes[attr]; !ok {
+			c.Attributes[attr] = DefaultAttributeValue
 		}
 	}
 	if c.Skills == nil {
 		c.Skills = []Skill{}
 	}
 	coreSkills := make(map[string]Skill, len(CoreSkills))
-	for _, sk := range CoreSkills {
-		coreSkills[sk.Name] = sk
+	for _, skill := range CoreSkills {
+		coreSkills[skill.Name] = skill
 	}
 	present := make(map[string]struct{}, len(c.Skills))
-	for _, sk := range c.Skills {
-		present[sk.Name] = struct{}{}
+	for _, skill := range c.Skills {
+		present[skill.Name] = struct{}{}
 	}
-	for _, sk := range CoreSkills {
-		if _, ok := present[sk.Name]; !ok {
-			sk.Level = UntrainedSkillLevel
-			c.Skills = append(c.Skills, sk)
+	for _, skill := range CoreSkills {
+		if _, ok := present[skill.Name]; !ok {
+			skill.Level = UntrainedSkillLevel
+			c.Skills = append(c.Skills, skill)
 		}
 	}
-	for i, sk := range c.Skills {
-		if def, ok := coreSkills[sk.Name]; ok {
+	for i, skill := range c.Skills {
+		if def, ok := coreSkills[skill.Name]; ok {
 			c.Skills[i].Attribute = def.Attribute
 			c.Skills[i].IsWeaponSkill = def.IsWeaponSkill
 		}
@@ -75,8 +75,8 @@ func Load(path string) (*Character, error) {
 		c.HeroicAbilities = []HeroicAbility{}
 	}
 	habDefs := make(map[string]HeroicAbility, len(CoreHeroicAbilities))
-	for _, h := range CoreHeroicAbilities {
-		habDefs[h.Name] = h
+	for _, ability := range CoreHeroicAbilities {
+		habDefs[ability.Name] = ability
 	}
 	for i := range c.HeroicAbilities {
 		base, _ := ParseQuantity(c.HeroicAbilities[i].Name)
@@ -92,11 +92,11 @@ func Load(path string) (*Character, error) {
 		c.MagicSkills = []Skill{}
 	}
 	magicDefs := make(map[string]Skill, len(MagicSkills))
-	for _, sk := range MagicSkills {
-		magicDefs[sk.Name] = sk
+	for _, skill := range MagicSkills {
+		magicDefs[skill.Name] = skill
 	}
-	for i, sk := range c.MagicSkills {
-		if def, ok := magicDefs[sk.Name]; ok {
+	for i, skill := range c.MagicSkills {
+		if def, ok := magicDefs[skill.Name]; ok {
 			c.MagicSkills[i].Attribute = def.Attribute
 			c.MagicSkills[i].IsWeaponSkill = def.IsWeaponSkill
 		}

@@ -24,11 +24,11 @@ type preparedEntry struct {
 func preparedColumnOrder(c *model.Character) []preparedEntry {
 	prepared := c.PreparedSpells()
 	entries := make([]preparedEntry, 0, len(prepared)+len(c.MagicTricks))
-	for i, sp := range prepared {
-		entries = append(entries, preparedEntry{id: idPreparedSpell(i), name: sp.Name})
+	for i, spell := range prepared {
+		entries = append(entries, preparedEntry{id: idPreparedSpell(i), name: spell.Name})
 	}
-	for i, tr := range c.MagicTricks {
-		entries = append(entries, preparedEntry{id: idPreparedTrick(i), name: tr.Name})
+	for i, trick := range c.MagicTricks {
+		entries = append(entries, preparedEntry{id: idPreparedTrick(i), name: trick.Name})
 	}
 	slices.SortStableFunc(entries, func(a, b preparedEntry) int {
 		return strings.Compare(strings.ToLower(a.name), strings.ToLower(b.name))
@@ -51,11 +51,11 @@ type heroicEntry struct {
 func heroicOrder(c *model.Character) []heroicEntry {
 	kin := model.KinAbilities(c.Kin)
 	entries := make([]heroicEntry, 0, len(kin)+len(c.HeroicAbilities))
-	for i, a := range kin {
-		entries = append(entries, heroicEntry{idKinAbility(i), a.Name})
+	for i, ability := range kin {
+		entries = append(entries, heroicEntry{idKinAbility(i), ability.Name})
 	}
-	for i, a := range c.HeroicAbilities {
-		entries = append(entries, heroicEntry{idHab(i), a.Name})
+	for i, ability := range c.HeroicAbilities {
+		entries = append(entries, heroicEntry{idHab(i), ability.Name})
 	}
 	slices.SortStableFunc(entries, func(a, b heroicEntry) int {
 		return strings.Compare(strings.ToLower(a.name), strings.ToLower(b.name))
@@ -335,8 +335,8 @@ func visualLayout(c *model.Character) [][]fieldID {
 		[]fieldID{idAttr(2), idAttr(5), gap, gap, idCondition(4), idCondition(5)},
 	)
 	var generalIdx, weaponIdx []int
-	for i, sk := range c.Skills {
-		if sk.IsWeaponSkill {
+	for i, skill := range c.Skills {
+		if skill.IsWeaponSkill {
 			weaponIdx = append(weaponIdx, i)
 		} else {
 			generalIdx = append(generalIdx, i)

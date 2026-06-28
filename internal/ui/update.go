@@ -576,8 +576,8 @@ func (m *Model) autoEquipSlot(cat model.ItemCategory) (int, bool) {
 	case model.ItemCategoryHelmet:
 		return 1, true
 	case model.ItemCategoryWeapon:
-		for i, w := range m.char.Weapons {
-			if w.Name == "" {
+		for i, weapon := range m.char.Weapons {
+			if weapon.Name == "" {
 				return 2 + i, true
 			}
 		}
@@ -589,16 +589,16 @@ func (m *Model) autoEquipSlot(cat model.ItemCategory) (int, bool) {
 }
 
 func (m *Model) equipSlotOptions() []string {
-	name := func(it model.Item) string {
-		if it.Name == "" {
+	name := func(item model.Item) string {
+		if item.Name == "" {
 			return "—"
 		}
-		return it.Name
+		return item.Name
 	}
 	opts := make([]string, 0, 2+len(m.char.Weapons))
 	opts = append(opts, "Armor: "+name(m.char.Armor), "Helmet: "+name(m.char.Helmet))
-	for i, w := range m.char.Weapons {
-		opts = append(opts, fmt.Sprintf("Weapon %d: %s", i+1, name(w)))
+	for i, weapon := range m.char.Weapons {
+		opts = append(opts, fmt.Sprintf("Weapon %d: %s", i+1, name(weapon)))
 	}
 	return opts
 }
@@ -808,15 +808,15 @@ func signOf(key string) int {
 func (m *Model) openAbilityPicker() {
 	const nameW = 24
 	var met, unmet []abilityPick
-	for _, h := range model.CoreHeroicAbilities {
-		display := h.Name
-		if label := model.RequirementLabel(h.Requirements); label != "" {
-			display = fmt.Sprintf("%-*s %s", nameW, h.Name, label)
+	for _, ability := range model.CoreHeroicAbilities {
+		display := ability.Name
+		if label := model.RequirementLabel(ability.Requirements); label != "" {
+			display = fmt.Sprintf("%-*s %s", nameW, ability.Name, label)
 		}
 		ap := abilityPick{
-			name:       h.Name,
+			name:       ability.Name,
 			display:    display,
-			selectable: m.char.MeetsHeroicAbilityRequirements(h),
+			selectable: m.char.MeetsHeroicAbilityRequirements(ability),
 		}
 		if ap.selectable {
 			met = append(met, ap)
@@ -853,9 +853,9 @@ func (m *Model) applyAbilityPick() {
 		return
 	}
 	var def model.HeroicAbility
-	for _, h := range model.CoreHeroicAbilities {
-		if h.Name == pick.name {
-			def = h
+	for _, ability := range model.CoreHeroicAbilities {
+		if ability.Name == pick.name {
+			def = ability
 			break
 		}
 	}
@@ -989,12 +989,12 @@ func (m *Model) openReqPicker(idx int) {
 	m.reqMode = true
 	m.reqIndex = idx
 	m.reqChosen = make(map[string]bool)
-	for _, r := range m.char.HeroicAbilities[idx].Requirements {
-		m.reqChosen[r] = true
+	for _, requirement := range m.char.HeroicAbilities[idx].Requirements {
+		m.reqChosen[requirement] = true
 	}
 	m.pickOptions = m.pickOptions[:0]
-	for _, sk := range model.CoreSkills {
-		m.pickOptions = append(m.pickOptions, sk.Name)
+	for _, skill := range model.CoreSkills {
+		m.pickOptions = append(m.pickOptions, skill.Name)
 	}
 	m.pickSelected = 0
 }
@@ -1017,9 +1017,9 @@ func (m Model) handleReqKey(key string) (tea.Model, tea.Cmd) {
 	case keyEnter:
 		// Write selected skills back in predefined order for stable display.
 		var reqs []string
-		for _, sk := range model.CoreSkills {
-			if m.reqChosen[sk.Name] {
-				reqs = append(reqs, sk.Name)
+		for _, skill := range model.CoreSkills {
+			if m.reqChosen[skill.Name] {
+				reqs = append(reqs, skill.Name)
 			}
 		}
 		if m.reqIndex >= 0 && m.reqIndex < len(m.char.HeroicAbilities) {
@@ -1246,17 +1246,17 @@ func (m *Model) openAddMagicPicker() {
 		}
 	}
 	// Spells and tricks already recorded are omitted: each can be learned only once.
-	for _, sp := range model.PredefinedSpells {
-		if m.char.KnowsSpell(sp.Name) {
+	for _, spell := range model.PredefinedSpells {
+		if m.char.KnowsSpell(spell.Name) {
 			continue
 		}
-		add(namePick{name: sp.Name, display: sp.Name, selectable: m.char.MeetsSpellRequirements(sp)})
+		add(namePick{name: spell.Name, display: spell.Name, selectable: m.char.MeetsSpellRequirements(spell)})
 	}
-	for _, tr := range model.CoreMagicTricks {
-		if m.char.KnowsMagicTrick(tr.Name) {
+	for _, trick := range model.CoreMagicTricks {
+		if m.char.KnowsMagicTrick(trick.Name) {
 			continue
 		}
-		add(namePick{name: tr.Name, display: tr.Name, trick: true, selectable: m.char.MeetsMagicTrickRequirements(tr)})
+		add(namePick{name: trick.Name, display: trick.Name, trick: true, selectable: m.char.MeetsMagicTrickRequirements(trick)})
 	}
 	byName := func(a, b namePick) int { return strings.Compare(a.display, b.display) }
 	slices.SortFunc(avail, byName)
@@ -1301,11 +1301,11 @@ func (m *Model) addSpell(name string) {
 	if m.char.KnowsSpell(name) { // a spell can be learned only once
 		return
 	}
-	for _, sp := range model.PredefinedSpells {
-		if sp.Name == name {
-			cp := sp
-			cp.Prerequisites = append([]string(nil), sp.Prerequisites...)
-			cp.Requirements = append([]string(nil), sp.Requirements...)
+	for _, spell := range model.PredefinedSpells {
+		if spell.Name == name {
+			cp := spell
+			cp.Prerequisites = append([]string(nil), spell.Prerequisites...)
+			cp.Requirements = append([]string(nil), spell.Requirements...)
 			m.char.Spells = append(m.char.Spells, cp)
 			break
 		}
@@ -1326,9 +1326,9 @@ func (m *Model) addTrick(name string) {
 	if m.char.KnowsMagicTrick(name) { // a trick can be learned only once
 		return
 	}
-	for _, tr := range model.CoreMagicTricks {
-		if tr.Name == name {
-			m.char.MagicTricks = append(m.char.MagicTricks, tr)
+	for _, trick := range model.CoreMagicTricks {
+		if trick.Name == name {
+			m.char.MagicTricks = append(m.char.MagicTricks, trick)
 			break
 		}
 	}
@@ -1571,15 +1571,15 @@ func (m *Model) openPrereqPicker(idx int) {
 	m.prereqMode = true
 	m.prereqIndex = idx
 	m.prereqChosen = make(map[string]bool)
-	for _, r := range m.char.Spells[idx].Prerequisites {
-		m.prereqChosen[r] = true
+	for _, prerequisite := range m.char.Spells[idx].Prerequisites {
+		m.prereqChosen[prerequisite] = true
 	}
 	m.pickOptions = m.pickOptions[:0]
-	for i, sp := range m.char.Spells {
-		if i == idx || sp.Name == "" {
+	for i, spell := range m.char.Spells {
+		if i == idx || spell.Name == "" {
 			continue
 		}
-		m.pickOptions = append(m.pickOptions, sp.Name)
+		m.pickOptions = append(m.pickOptions, spell.Name)
 	}
 	m.pickSelected = 0
 }
@@ -1625,8 +1625,8 @@ func cycleEnum(opts []string, cur string, dir int) string {
 		return cur
 	}
 	idx := 0
-	for i, o := range opts {
-		if o == cur {
+	for i, option := range opts {
+		if option == cur {
 			idx = i
 			break
 		}
@@ -1725,8 +1725,8 @@ func (m *Model) syncItemFocus() {
 	m.itemDamage.Blur()
 	m.itemDur.Blur()
 	m.itemFeatures.Blur()
-	it := m.itemTarget
-	if it == nil {
+	item := m.itemTarget
+	if item == nil {
 		return
 	}
 	focus := func(ti *textinput.Model, v string) {
@@ -1736,42 +1736,42 @@ func (m *Model) syncItemFocus() {
 	}
 	switch m.itemActive {
 	case itemFieldName:
-		focus(&m.itemName, it.Name)
+		focus(&m.itemName, item.Name)
 	case itemFieldWeight:
-		focus(&m.itemWeight, strconv.Itoa(it.Weight))
+		focus(&m.itemWeight, strconv.Itoa(item.Weight))
 	case itemFieldRating:
-		focus(&m.itemRating, strconv.Itoa(it.ArmorRating))
+		focus(&m.itemRating, strconv.Itoa(item.ArmorRating))
 	case itemFieldRange:
-		focus(&m.itemRange, strconv.Itoa(it.Range))
+		focus(&m.itemRange, strconv.Itoa(item.Range))
 	case itemFieldDamage:
-		focus(&m.itemDamage, it.Damage)
+		focus(&m.itemDamage, item.Damage)
 	case itemFieldDur:
-		focus(&m.itemDur, strconv.Itoa(it.Durability))
+		focus(&m.itemDur, strconv.Itoa(item.Durability))
 	case itemFieldFeatures:
-		focus(&m.itemFeatures, strings.Join(it.Features, ", "))
+		focus(&m.itemFeatures, strings.Join(item.Features, ", "))
 	}
 }
 
 func (m *Model) commitCurrentItemField() {
-	it := m.itemTarget
-	if it == nil {
+	item := m.itemTarget
+	if item == nil {
 		return
 	}
 	switch m.itemActive {
 	case itemFieldName:
-		it.Name = m.itemName.Value()
+		item.Name = m.itemName.Value()
 	case itemFieldWeight:
-		it.Weight = max(1, atoiOr(m.itemWeight.Value(), 1))
+		item.Weight = max(1, atoiOr(m.itemWeight.Value(), 1))
 	case itemFieldRating:
-		it.ArmorRating = max(0, atoiOr(m.itemRating.Value(), 0))
+		item.ArmorRating = max(0, atoiOr(m.itemRating.Value(), 0))
 	case itemFieldRange:
-		it.Range = max(0, atoiOr(m.itemRange.Value(), 0))
+		item.Range = max(0, atoiOr(m.itemRange.Value(), 0))
 	case itemFieldDamage:
-		it.Damage = m.itemDamage.Value()
+		item.Damage = m.itemDamage.Value()
 	case itemFieldDur:
-		it.Durability = max(0, atoiOr(m.itemDur.Value(), 0))
+		item.Durability = max(0, atoiOr(m.itemDur.Value(), 0))
 	case itemFieldFeatures:
-		it.Features = splitCSV(m.itemFeatures.Value())
+		item.Features = splitCSV(m.itemFeatures.Value())
 	}
 }
 
@@ -1805,56 +1805,56 @@ func (m *Model) stepItemField(active, dir int) int {
 
 // cycleItemCategory changes the item's category and clears stats that no longer apply.
 func (m *Model) cycleItemCategory(dir int) {
-	it := m.itemTarget
-	if it == nil {
+	item := m.itemTarget
+	if item == nil {
 		return
 	}
 	cur := 0
-	for i, c := range itemCategoryOrder {
-		if c == it.Category {
+	for i, category := range itemCategoryOrder {
+		if category == item.Category {
 			cur = i
 			break
 		}
 	}
 	n := len(itemCategoryOrder)
-	it.Category = itemCategoryOrder[((cur+dir)%n+n)%n]
-	normalizeItemStats(it)
+	item.Category = itemCategoryOrder[((cur+dir)%n+n)%n]
+	normalizeItemStats(item)
 }
 
 func (m *Model) cycleGrip(dir int) {
-	it := m.itemTarget
-	if it == nil {
+	item := m.itemTarget
+	if item == nil {
 		return
 	}
 	cur := 0
-	for i, g := range model.AllGrips {
-		if g == it.Grip {
+	for i, grip := range model.AllGrips {
+		if grip == item.Grip {
 			cur = i
 			break
 		}
 	}
 	n := len(model.AllGrips)
-	it.Grip = model.AllGrips[((cur+dir)%n+n)%n]
+	item.Grip = model.AllGrips[((cur+dir)%n+n)%n]
 }
 
 // toggleItemBane toggles the bane for the active field, reporting whether the
 // active field was a bane (so other keys can fall through).
 func (m *Model) toggleItemBane() bool {
-	it := m.itemTarget
-	if it == nil {
+	item := m.itemTarget
+	if item == nil {
 		return false
 	}
 	switch m.itemActive {
 	case itemFieldBaneSneak:
-		it.BaneToSneaking = !it.BaneToSneaking
+		item.BaneToSneaking = !item.BaneToSneaking
 	case itemFieldBaneEvade:
-		it.BaneToEvade = !it.BaneToEvade
+		item.BaneToEvade = !item.BaneToEvade
 	case itemFieldBaneAcro:
-		it.BaneToAcrobatics = !it.BaneToAcrobatics
+		item.BaneToAcrobatics = !item.BaneToAcrobatics
 	case itemFieldBaneAware:
-		it.BaneToAwareness = !it.BaneToAwareness
+		item.BaneToAwareness = !item.BaneToAwareness
 	case itemFieldBaneRanged:
-		it.BaneToRanged = !it.BaneToRanged
+		item.BaneToRanged = !item.BaneToRanged
 	default:
 		return false
 	}
@@ -1863,17 +1863,17 @@ func (m *Model) toggleItemBane() bool {
 
 // normalizeItemStats zeroes stat fields that do not belong to the item's category
 // so stale values from a previous category never persist.
-func normalizeItemStats(it *model.Item) {
+func normalizeItemStats(item *model.Item) {
 	clearWeapon := func() {
-		it.Grip = ""
-		it.Range = 0
-		it.Damage = ""
-		it.Durability = 0
-		it.Features = nil
+		item.Grip = ""
+		item.Range = 0
+		item.Damage = ""
+		item.Durability = 0
+		item.Features = nil
 	}
-	clearArmorBanes := func() { it.BaneToSneaking, it.BaneToEvade, it.BaneToAcrobatics = false, false, false }
-	clearHelmetBanes := func() { it.BaneToAwareness, it.BaneToRanged = false, false }
-	switch it.Category {
+	clearArmorBanes := func() { item.BaneToSneaking, item.BaneToEvade, item.BaneToAcrobatics = false, false, false }
+	clearHelmetBanes := func() { item.BaneToAwareness, item.BaneToRanged = false, false }
+	switch item.Category {
 	case model.ItemCategoryArmor:
 		clearHelmetBanes()
 		clearWeapon()
@@ -1881,14 +1881,14 @@ func normalizeItemStats(it *model.Item) {
 		clearArmorBanes()
 		clearWeapon()
 	case model.ItemCategoryWeapon:
-		it.ArmorRating = 0
+		item.ArmorRating = 0
 		clearArmorBanes()
 		clearHelmetBanes()
-		if it.Grip == "" {
-			it.Grip = model.Grip1H
+		if item.Grip == "" {
+			item.Grip = model.Grip1H
 		}
 	default: // CatNone
-		it.ArmorRating = 0
+		item.ArmorRating = 0
 		clearArmorBanes()
 		clearHelmetBanes()
 		clearWeapon()
