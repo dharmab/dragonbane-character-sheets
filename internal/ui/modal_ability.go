@@ -2,10 +2,7 @@ package ui
 
 import (
 	"fmt"
-	"strconv"
-	"strings"
 
-	"charm.land/bubbles/v2/textinput"
 	tea "charm.land/bubbletea/v2"
 	"github.com/dharmab/dragonbane-charsheet/internal/model"
 )
@@ -38,7 +35,7 @@ func (m *Model) openAbilityPicker() {
 	picks = append(picks, unmet...)
 	m.abilityPicks = picks
 	m.pickSelected = 0
-	m.pickAbility = true
+	m.activePickerKind = pickerAbility
 	m.picking = true
 }
 
@@ -57,7 +54,8 @@ func (m *Model) applyAbilityPick() {
 		if fi := m.fieldIndex(idHeroicAbility(idx)); fi >= 0 {
 			m.focus = fi
 		}
-		m.startAbilityEdit(idx)
+		m.activeModal = newAbilityModal(m, idx)
+		m.modalMode = true
 		return
 	}
 	var def model.HeroicAbility
@@ -88,107 +86,6 @@ func (m *Model) applyAbilityPick() {
 	})
 	m.rebuildFields()
 	m.char.ClampResources()
-}
-
-func (m *Model) startAbilityEdit(idx int) {
-	m.abilityMode = true
-	m.abilityIndex = idx
-	m.abilityActive = 0
-	m.syncAbilityFocus()
-}
-
-// syncAbilityFocus focuses the text input for the active modal field (none for the
-// requirements field) and seeds it from the ability's current value.
-func (m *Model) syncAbilityFocus() {
-	a := m.char.HeroicAbilities[m.abilityIndex]
-	m.abilityName.Blur()
-	m.abilityCost.Blur()
-	m.abilityDesc.Blur()
-	switch m.abilityActive {
-	case 0:
-		m.abilityName.SetValue(a.Name)
-		m.abilityName.CursorEnd()
-		m.abilityName.Focus()
-	case 1:
-		m.abilityCost.SetValue(strconv.Itoa(a.WPCost))
-		m.abilityCost.CursorEnd()
-		m.abilityCost.Focus()
-	case 2:
-		m.abilityDesc.SetValue(a.Description)
-		m.abilityDesc.CursorEnd()
-		m.abilityDesc.Focus()
-	}
-}
-
-func (m *Model) commitCurrentAbilityField() {
-	idx := m.abilityIndex
-	if idx < 0 || idx >= len(m.char.HeroicAbilities) {
-		return
-	}
-	switch m.abilityActive {
-	case 0:
-		m.char.HeroicAbilities[idx].Name = m.abilityName.Value()
-	case 1:
-		if n, err := strconv.Atoi(strings.TrimSpace(m.abilityCost.Value())); err == nil {
-			m.char.HeroicAbilities[idx].WPCost = max(0, n)
-		} else {
-			m.char.HeroicAbilities[idx].WPCost = 0
-		}
-	case 2:
-		m.char.HeroicAbilities[idx].Description = m.abilityDesc.Value()
-	}
-}
-
-func (m *Model) closeAbilityEdit() {
-	m.abilityMode = false
-	m.abilityName.Blur()
-	m.abilityCost.Blur()
-	m.abilityDesc.Blur()
-}
-
-func (m Model) handleAbilityKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
-	key := msg.String()
-	switch key {
-	case keyQuit:
-		return m, tea.Quit
-	case keyEnter:
-		if m.abilityActive == 3 {
-			m.openReqPicker(m.abilityIndex)
-			return m, nil
-		}
-		m.commitCurrentAbilityField()
-		m.closeAbilityEdit()
-		m.char.ClampResources()
-		m.autoSave()
-		return m, nil
-	case keyEsc:
-		m.commitCurrentAbilityField()
-		m.closeAbilityEdit()
-		m.char.ClampResources()
-		m.autoSave()
-		return m, nil
-	case keyDown:
-		m.commitCurrentAbilityField()
-		m.abilityActive = (m.abilityActive + 1) % 4
-		m.syncAbilityFocus()
-		return m, textinput.Blink
-	case keyUp:
-		m.commitCurrentAbilityField()
-		m.abilityActive = (m.abilityActive + 3) % 4
-		m.syncAbilityFocus()
-		return m, textinput.Blink
-	default:
-		var cmd tea.Cmd
-		switch m.abilityActive {
-		case 0:
-			m.abilityName, cmd = m.abilityName.Update(msg)
-		case 1:
-			m.abilityCost, cmd = m.abilityCost.Update(msg)
-		case 2:
-			m.abilityDesc, cmd = m.abilityDesc.Update(msg)
-		}
-		return m, cmd
-	}
 }
 
 // openReqPicker opens the multi-select skill list for editing ability idx's

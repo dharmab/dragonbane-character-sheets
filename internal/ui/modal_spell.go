@@ -2,34 +2,11 @@ package ui
 
 import (
 	"slices"
-	"strconv"
 	"strings"
 
 	"charm.land/bubbles/v2/textinput"
 	tea "charm.land/bubbletea/v2"
 	"github.com/dharmab/dragonbane-charsheet/internal/model"
-)
-
-// Spell edit modal field indices.
-const (
-	spellFieldName = iota
-	spellFieldSchool
-	spellFieldRank
-	spellFieldCasting
-	spellFieldRange
-	spellFieldDuration
-	spellFieldReq
-	spellFieldPrereq
-	spellFieldDesc
-	spellFieldCount
-)
-
-// Trick edit modal field indices.
-const (
-	trickFieldName = iota
-	trickFieldSchool
-	trickFieldDesc
-	trickFieldCount
 )
 
 func (m *Model) openGrimoire() {
@@ -78,20 +55,24 @@ func (m Model) handleGrimoireKey(key string) (tea.Model, tea.Cmd) {
 			sp := m.char.Spells[m.grimoireSel]
 			if model.IsCoreSpell(sp.Name) {
 				m.detailSpell = sp
-				m.spellDetailMode = true
+				m.detailMode = true
+				m.activeDetailContent = detailContentSpell
 				return m, nil
 			}
-			m.startSpellEdit(m.grimoireSel)
+			m.activeModal = newSpellModal(&m, m.grimoireSel)
+			m.modalMode = true
 			return m, textinput.Blink
 		}
 		if ti := m.grimoireSel - nSpells; ti >= 0 && ti < len(m.char.MagicTricks) {
 			tr := m.char.MagicTricks[ti]
 			if model.IsCoreMagicTrick(tr.Name) {
 				m.detailTrick = tr
-				m.trickDetailMode = true
+				m.detailMode = true
+				m.activeDetailContent = detailContentTrick
 				return m, nil
 			}
-			m.startTrickEdit(ti)
+			m.activeModal = newTrickModal(&m, ti)
+			m.modalMode = true
 			return m, textinput.Blink
 		}
 		return m, nil
@@ -127,7 +108,7 @@ func (m *Model) openMagicSkillPicker() {
 		return
 	}
 	m.pickSelected = 0
-	m.pickMagicSkill = true
+	m.activePickerKind = pickerMagicSkill
 	m.picking = true
 }
 
@@ -184,7 +165,7 @@ func (m *Model) openAddMagicPicker() {
 	m.magicPicks = append(m.magicPicks, avail...)
 	m.magicPicks = append(m.magicPicks, unavail...)
 	m.pickSelected = 0
-	m.pickMagic = true
+	m.activePickerKind = pickerMagic
 	m.picking = true
 }
 
@@ -215,7 +196,8 @@ func (m *Model) addSpell(name string) {
 		idx := len(m.char.Spells) - 1
 		m.grimoireSel = idx
 		m.rebuildFields()
-		m.startSpellEdit(idx)
+		m.activeModal = newSpellModal(m, idx)
+		m.modalMode = true
 		return
 	}
 	if m.char.KnowsSpell(name) { // a spell can be learned only once
@@ -240,7 +222,8 @@ func (m *Model) addTrick(name string) {
 		m.char.MagicTricks = append(m.char.MagicTricks, model.MagicTrick{School: model.MagiclSchoolAnimism})
 		idx := len(m.char.MagicTricks) - 1
 		m.grimoireSel = len(m.char.Spells) + idx
-		m.startTrickEdit(idx)
+		m.activeModal = newTrickModal(m, idx)
+		m.modalMode = true
 		return
 	}
 	if m.char.KnowsMagicTrick(name) { // a trick can be learned only once
@@ -251,237 +234,6 @@ func (m *Model) addTrick(name string) {
 			m.char.MagicTricks = append(m.char.MagicTricks, trick)
 			break
 		}
-	}
-}
-
-func (m *Model) startSpellEdit(idx int) {
-	m.spellMode = true
-	m.spellIndex = idx
-	m.spellActive = spellFieldName
-	m.syncSpellFocus()
-}
-
-// syncSpellFocus focuses the text input for the active modal field (none for the enum or
-// prerequisites fields) and seeds it from the spell's current value.
-func (m *Model) syncSpellFocus() {
-	sp := m.char.Spells[m.spellIndex]
-	m.spellName.Blur()
-	m.spellRank.Blur()
-	m.spellRange.Blur()
-	m.spellReq.Blur()
-	m.spellDesc.Blur()
-	switch m.spellActive {
-	case spellFieldName:
-		m.spellName.SetValue(sp.Name)
-		m.spellName.CursorEnd()
-		m.spellName.Focus()
-	case spellFieldRank:
-		m.spellRank.SetValue(strconv.Itoa(sp.Rank))
-		m.spellRank.CursorEnd()
-		m.spellRank.Focus()
-	case spellFieldRange:
-		m.spellRange.SetValue(sp.Range)
-		m.spellRange.CursorEnd()
-		m.spellRange.Focus()
-	case spellFieldReq:
-		m.spellReq.SetValue(strings.Join(sp.Requirements, ", "))
-		m.spellReq.CursorEnd()
-		m.spellReq.Focus()
-	case spellFieldDesc:
-		m.spellDesc.SetValue(sp.Description)
-		m.spellDesc.CursorEnd()
-		m.spellDesc.Focus()
-	}
-}
-
-func (m *Model) commitCurrentSpellField() {
-	idx := m.spellIndex
-	if idx < 0 || idx >= len(m.char.Spells) {
-		return
-	}
-	sp := &m.char.Spells[idx]
-	switch m.spellActive {
-	case spellFieldName:
-		sp.Name = m.spellName.Value()
-	case spellFieldRank:
-		if n, err := strconv.Atoi(strings.TrimSpace(m.spellRank.Value())); err == nil {
-			sp.Rank = max(0, n)
-		} else {
-			sp.Rank = 0
-		}
-	case spellFieldRange:
-		sp.Range = m.spellRange.Value()
-	case spellFieldReq:
-		sp.Requirements = splitCSV(m.spellReq.Value())
-	case spellFieldDesc:
-		sp.Description = m.spellDesc.Value()
-	}
-}
-
-func (m *Model) closeSpellEdit() {
-	m.spellMode = false
-	m.spellName.Blur()
-	m.spellRank.Blur()
-	m.spellRange.Blur()
-	m.spellReq.Blur()
-	m.spellDesc.Blur()
-}
-
-func (m Model) handleSpellKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
-	key := msg.String()
-	if key == keyQuit {
-		return m, tea.Quit
-	}
-	// Enum fields (School/Casting Time/Duration) are not text inputs: arrows cycle them.
-	if key == keyLeft || key == keyRight {
-		if m.cycleSpellEnum(m.spellActive, arrowSign(key)) {
-			m.autoSave()
-			return m, nil
-		}
-	}
-	switch key {
-	case keyEnter:
-		if m.spellActive == spellFieldPrereq {
-			m.openPrereqPicker(m.spellIndex)
-			return m, nil
-		}
-		m.commitCurrentSpellField()
-		m.closeSpellEdit()
-		m.autoSave()
-		return m, nil
-	case keyEsc:
-		m.commitCurrentSpellField()
-		m.closeSpellEdit()
-		m.autoSave()
-		return m, nil
-	case keyDown:
-		m.commitCurrentSpellField()
-		m.spellActive = (m.spellActive + 1) % spellFieldCount
-		m.syncSpellFocus()
-		return m, textinput.Blink
-	case keyUp:
-		m.commitCurrentSpellField()
-		m.spellActive = (m.spellActive - 1 + spellFieldCount) % spellFieldCount
-		m.syncSpellFocus()
-		return m, textinput.Blink
-	default:
-		var cmd tea.Cmd
-		switch m.spellActive {
-		case spellFieldName:
-			m.spellName, cmd = m.spellName.Update(msg)
-		case spellFieldRank:
-			m.spellRank, cmd = m.spellRank.Update(msg)
-		case spellFieldRange:
-			m.spellRange, cmd = m.spellRange.Update(msg)
-		case spellFieldReq:
-			m.spellReq, cmd = m.spellReq.Update(msg)
-		case spellFieldDesc:
-			m.spellDesc, cmd = m.spellDesc.Update(msg)
-		}
-		return m, cmd
-	}
-}
-
-// cycleSpellEnum advances the active enum field by dir (±1) and reports whether the
-// active field was an enum field (so text fields can fall through to the text input).
-func (m *Model) cycleSpellEnum(active, dir int) bool {
-	if m.spellIndex < 0 || m.spellIndex >= len(m.char.Spells) {
-		return false
-	}
-	sp := &m.char.Spells[m.spellIndex]
-	switch active {
-	case spellFieldSchool:
-		sp.School = model.MagicSchool(cycleEnum(toStrings(model.AllMagicSchools), string(sp.School), dir))
-	case spellFieldCasting:
-		sp.CastingTime = model.CastingTime(cycleEnum(toStrings(model.AllCastingTimes), string(sp.CastingTime), dir))
-	case spellFieldDuration:
-		sp.Duration = model.SpellDuration(cycleEnum(toStrings(model.AllSpellDurations), string(sp.Duration), dir))
-	default:
-		return false
-	}
-	return true
-}
-
-func (m *Model) startTrickEdit(idx int) {
-	m.trickMode = true
-	m.trickIndex = idx
-	m.trickActive = trickFieldName
-	m.syncTrickFocus()
-}
-
-func (m *Model) syncTrickFocus() {
-	tr := m.char.MagicTricks[m.trickIndex]
-	m.trickName.Blur()
-	m.trickDesc.Blur()
-	switch m.trickActive {
-	case trickFieldName:
-		m.trickName.SetValue(tr.Name)
-		m.trickName.CursorEnd()
-		m.trickName.Focus()
-	case trickFieldDesc:
-		m.trickDesc.SetValue(tr.Description)
-		m.trickDesc.CursorEnd()
-		m.trickDesc.Focus()
-	}
-}
-
-func (m *Model) commitCurrentTrickField() {
-	idx := m.trickIndex
-	if idx < 0 || idx >= len(m.char.MagicTricks) {
-		return
-	}
-	switch m.trickActive {
-	case trickFieldName:
-		m.char.MagicTricks[idx].Name = m.trickName.Value()
-	case trickFieldDesc:
-		m.char.MagicTricks[idx].Description = m.trickDesc.Value()
-	}
-}
-
-func (m *Model) closeTrickEdit() {
-	m.trickMode = false
-	m.trickName.Blur()
-	m.trickDesc.Blur()
-}
-
-func (m Model) handleTrickKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
-	key := msg.String()
-	if key == keyQuit {
-		return m, tea.Quit
-	}
-	if (key == keyLeft || key == keyRight) && m.trickActive == trickFieldSchool {
-		if idx := m.trickIndex; idx >= 0 && idx < len(m.char.MagicTricks) {
-			tr := &m.char.MagicTricks[idx]
-			tr.School = model.MagicSchool(cycleEnum(toStrings(model.AllMagicSchools), string(tr.School), arrowSign(key)))
-			m.autoSave()
-		}
-		return m, nil
-	}
-	switch key {
-	case keyEnter, keyEsc:
-		m.commitCurrentTrickField()
-		m.closeTrickEdit()
-		m.autoSave()
-		return m, nil
-	case keyDown:
-		m.commitCurrentTrickField()
-		m.trickActive = (m.trickActive + 1) % trickFieldCount
-		m.syncTrickFocus()
-		return m, textinput.Blink
-	case keyUp:
-		m.commitCurrentTrickField()
-		m.trickActive = (m.trickActive - 1 + trickFieldCount) % trickFieldCount
-		m.syncTrickFocus()
-		return m, textinput.Blink
-	default:
-		var cmd tea.Cmd
-		switch m.trickActive {
-		case trickFieldName:
-			m.trickName, cmd = m.trickName.Update(msg)
-		case trickFieldDesc:
-			m.trickDesc, cmd = m.trickDesc.Update(msg)
-		}
-		return m, cmd
 	}
 }
 

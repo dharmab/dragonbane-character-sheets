@@ -91,23 +91,23 @@ const (
 	groupWeaknessName
 	groupRestRound
 	groupRestStretch
-	groupCondition  // index → conditionOrder
-	groupSkillLevel // index → model.Skills
-	groupSkillAdvanced   // index → model.Skills
+	groupCondition     // index → conditionOrder
+	groupSkillLevel    // index → model.Skills
+	groupSkillAdvanced // index → model.Skills
 	groupArmor
 	groupHelmet
-	groupWeaponAtHand // index → model.WeaponsAtHand
-	groupWeaponDurability    // index → model.WeaponsAtHand
-	groupInventoryName      // index → model.Inventory
-	groupInventoryWeight    // index → model.Inventory
+	groupWeaponAtHand     // index → model.WeaponsAtHand
+	groupWeaponDurability // index → model.WeaponsAtHand
+	groupInventoryName    // index → model.Inventory
+	groupInventoryWeight  // index → model.Inventory
 	groupInventoryEmpty
 	groupTinyItem // index → model.TinyItems
 	groupTinyEmpty
-	groupKinAbility // index → KinAbilities(model.Kin)
-	groupHeroicAbility        // index → model.HeroicAbilities
+	groupKinAbility    // index → KinAbilities(model.Kin)
+	groupHeroicAbility // index → model.HeroicAbilities
 	groupHeroicAbilityEmpty
-	groupMagicSkillLevel // index → model.MagicSkills
-	groupMagicSkillAdvanced   // index → model.MagicSkills
+	groupMagicSkillLevel    // index → model.MagicSkills
+	groupMagicSkillAdvanced // index → model.MagicSkills
 	groupMagicEmpty
 	groupPreparedSpell // index → model.PreparedSpells()
 	groupPreparedTrick // index → model.MagicTricks (always castable; no slot)
@@ -118,46 +118,46 @@ const (
 // as a map key and supports == directly — no string parsing, no fmt.Sscanf.
 type fieldID struct {
 	group fieldGroup
-	index  int
+	index int
 }
 
 // Constructors for the singleton and indexed field groups, so layout and
 // rendering refer to fields by typed value instead of formatted strings.
 var (
-	idName          = fieldID{group: groupName}
-	idAge           = fieldID{group: groupAge}
-	idKin           = fieldID{group: groupKin}
-	idProfession    = fieldID{group: groupProfession}
-	idCurrentHP     = fieldID{group: groupCurrentHP}
-	idCurrentWP     = fieldID{group: groupCurrentWP}
-	idWeaknessName  = fieldID{group: groupWeaknessName}
-	idRestRound     = fieldID{group: groupRestRound}
-	idRestStretch   = fieldID{group: groupRestStretch}
-	idArmor         = fieldID{group: groupArmor}
-	idHelmet        = fieldID{group: groupHelmet}
-	idInventoryEmpty      = fieldID{group: groupInventoryEmpty}
-	idTinyEmpty     = fieldID{group: groupTinyEmpty}
-	idHeroicAbilityEmpty      = fieldID{group: groupHeroicAbilityEmpty}
-	idMagicEmpty    = fieldID{group: groupMagicEmpty}
-	idPreparedEmpty = fieldID{group: groupPreparedEmpty}
+	idName               = fieldID{group: groupName}
+	idAge                = fieldID{group: groupAge}
+	idKin                = fieldID{group: groupKin}
+	idProfession         = fieldID{group: groupProfession}
+	idCurrentHP          = fieldID{group: groupCurrentHP}
+	idCurrentWP          = fieldID{group: groupCurrentWP}
+	idWeaknessName       = fieldID{group: groupWeaknessName}
+	idRestRound          = fieldID{group: groupRestRound}
+	idRestStretch        = fieldID{group: groupRestStretch}
+	idArmor              = fieldID{group: groupArmor}
+	idHelmet             = fieldID{group: groupHelmet}
+	idInventoryEmpty     = fieldID{group: groupInventoryEmpty}
+	idTinyEmpty          = fieldID{group: groupTinyEmpty}
+	idHeroicAbilityEmpty = fieldID{group: groupHeroicAbilityEmpty}
+	idMagicEmpty         = fieldID{group: groupMagicEmpty}
+	idPreparedEmpty      = fieldID{group: groupPreparedEmpty}
 )
 
-func idAttribute(i int) fieldID         { return fieldID{groupAttribute, i} }
-func idCondition(i int) fieldID    { return fieldID{groupCondition, i} }
-func idSkillLevel(i int) fieldID   { return fieldID{groupSkillLevel, i} }
-func idSkillAdvanced(i int) fieldID     { return fieldID{groupSkillAdvanced, i} }
-func idWeaponAtHand(i int) fieldID { return fieldID{groupWeaponAtHand, i} }
-func idWeaponDurability(i int) fieldID    { return fieldID{groupWeaponDurability, i} }
-func idInventoryName(i int) fieldID      { return fieldID{groupInventoryName, i} }
-func idInventoryWeight(i int) fieldID    { return fieldID{groupInventoryWeight, i} }
-func idTiny(i int) fieldID         { return fieldID{groupTinyItem, i} }
-func idKinAbility(i int) fieldID   { return fieldID{groupKinAbility, i} }
-func idHeroicAbility(i int) fieldID          { return fieldID{groupHeroicAbility, i} }
+func idAttribute(i int) fieldID        { return fieldID{groupAttribute, i} }
+func idCondition(i int) fieldID        { return fieldID{groupCondition, i} }
+func idSkillLevel(i int) fieldID       { return fieldID{groupSkillLevel, i} }
+func idSkillAdvanced(i int) fieldID    { return fieldID{groupSkillAdvanced, i} }
+func idWeaponAtHand(i int) fieldID     { return fieldID{groupWeaponAtHand, i} }
+func idWeaponDurability(i int) fieldID { return fieldID{groupWeaponDurability, i} }
+func idInventoryName(i int) fieldID    { return fieldID{groupInventoryName, i} }
+func idInventoryWeight(i int) fieldID  { return fieldID{groupInventoryWeight, i} }
+func idTiny(i int) fieldID             { return fieldID{groupTinyItem, i} }
+func idKinAbility(i int) fieldID       { return fieldID{groupKinAbility, i} }
+func idHeroicAbility(i int) fieldID    { return fieldID{groupHeroicAbility, i} }
 
-func idMagicSkillLevel(i int) fieldID { return fieldID{groupMagicSkillLevel, i} }
-func idMagicSkillAdvanced(i int) fieldID   { return fieldID{groupMagicSkillAdvanced, i} }
-func idPreparedSpell(i int) fieldID   { return fieldID{groupPreparedSpell, i} }
-func idPreparedTrick(i int) fieldID   { return fieldID{groupPreparedTrick, i} }
+func idMagicSkillLevel(i int) fieldID    { return fieldID{groupMagicSkillLevel, i} }
+func idMagicSkillAdvanced(i int) fieldID { return fieldID{groupMagicSkillAdvanced, i} }
+func idPreparedSpell(i int) fieldID      { return fieldID{groupPreparedSpell, i} }
+func idPreparedTrick(i int) fieldID      { return fieldID{groupPreparedTrick, i} }
 
 type field struct {
 	id      fieldID
@@ -198,6 +198,67 @@ const (
 	saveFailed                   // the most recent write errored
 )
 
+// appMode identifies which overlay (if any) is currently covering the character
+// sheet. currentMode() derives this from the boolean mode fields so handleKey
+// and render can dispatch via a single switch instead of a cascade of ifs.
+type appMode int
+
+const (
+	modeBrowse       appMode = iota // no overlay; navigate the character sheet
+	modeInlineEdit                  // single-field inline text editor
+	modeEditModal                   // generic multi-field edit modal (spell/trick/item/ability/weakness)
+	modeGrimoire                    // grimoire list overlay
+	modeDetail                      // read-only popup (ability, spell, or trick)
+	modeReqPicker                   // multi-select skill picker (ability requirements)
+	modePrereqPicker                // multi-select spell picker (spell prerequisites)
+	modePicker                      // list picker (enum, ability, magic, equip)
+)
+
+// currentMode returns the active overlay. The check order mirrors overlay
+// precedence: outermost (picker) first, browse last. prereqMode and reqMode
+// are checked before modalMode so their pickers stack on top of the edit modal.
+func (m Model) currentMode() appMode {
+	switch {
+	case m.picking:
+		return modePicker
+	case m.detailMode:
+		return modeDetail
+	case m.prereqMode:
+		return modePrereqPicker
+	case m.reqMode:
+		return modeReqPicker
+	case m.modalMode:
+		return modeEditModal
+	case m.grimoireMode:
+		return modeGrimoire
+	case m.editing:
+		return modeInlineEdit
+	default:
+		return modeBrowse
+	}
+}
+
+// pickerKind identifies the active picker when currentMode() == modePicker.
+type pickerKind int
+
+const (
+	pickerEnum       pickerKind = iota // standard enum-field picker
+	pickerAbility                      // heroic ability add picker
+	pickerMagicSkill                   // magic skill add picker
+	pickerMagic                        // grimoire add picker
+	pickerEquip                        // equip item to a gear slot
+)
+
+// detailContent identifies which read-only popup to show when
+// currentMode() == modeDetail.
+type detailContent int
+
+const (
+	detailContentAbility detailContent = iota
+	detailContentSpell
+	detailContentTrick
+)
+
 // Model mixes value and pointer receivers by necessity: bubbletea's tea.Model
 // requires value-receiver Init/Update/View, while the mutating helpers take a
 // pointer receiver.
@@ -228,80 +289,43 @@ type Model struct {
 	professionEdit bool // inline text edit of a custom profession name
 	textInput      textinput.Model
 
-	picking         bool
-	pickOptions     []string
-	pickSelected    int
-	pickEquipSource int // -1 = enum pick; ≥0 = inventory index being donned
+	picking          bool
+	activePickerKind pickerKind // which picker is open when picking == true
+	pickOptions      []string
+	pickSelected     int
+	pickEquipSource  int // -1 = enum pick; ≥0 = inventory index being donned
 
-	weaknessMode   bool
-	weaknessActive int // 0 = name, 1 = description
-	weaknessName   textinput.Model
-	weaknessDesc   textinput.Model
-
-	// Item edit modal. itemTarget points at the item being edited, which lives in
-	// either a gear slot or the inventory; the modal mutates it in place. Category
-	// and grip are enums cycled with ←/→; everything else is a text input.
-	itemMode     bool
-	itemActive   int // one of the itemField* constants
-	itemTarget   *model.Item
-	itemName     textinput.Model
-	itemWeight   textinput.Model
-	itemRating   textinput.Model
-	itemRange    textinput.Model
-	itemDamage   textinput.Model
-	itemDur      textinput.Model
-	itemFeatures textinput.Model
-
-	pickAbility  bool          // true when the picker is choosing a heroic ability to add
 	abilityPicks []abilityPick // options for the ability picker (Custom first, then met, then unmet)
-
-	abilityMode   bool // ability edit modal active
-	abilityActive int  // 0 = name, 1 = cost, 2 = description, 3 = requirements
-	abilityIndex  int  // index into char.HeroicAbilities being edited
-	abilityName   textinput.Model
-	abilityCost   textinput.Model
-	abilityDesc   textinput.Model
 
 	reqMode   bool            // multi-select skill picker for an ability's requirements
 	reqIndex  int             // ability index whose requirements are being edited
 	reqChosen map[string]bool // skill name -> selected
 
-	detailMode    bool                // read-only ability description popup
-	detailAbility model.HeroicAbility // ability shown in the detail popup
+	// Read-only detail popup. detailMode is true when one is showing;
+	// activeDetailContent selects which view to render.
+	detailMode          bool
+	activeDetailContent detailContent
+	detailAbility       model.HeroicAbility // shown when activeDetailContent == detailContentAbility
 
 	// Magic. The magic-skill add picker and the grimoire add picker both reuse
-	// `picking`; the flags below mark which one is active.
-	pickMagicSkill bool       // picker is choosing a magic skill to add
-	pickMagic      bool       // grimoire add picker (spells and tricks together)
-	magicPicks     []namePick // options for the grimoire add picker (Custom entries first)
+	// `picking`; activePickerKind distinguishes them (pickerMagicSkill / pickerMagic).
+	magicPicks []namePick // options for the grimoire add picker (Custom entries first)
 
 	grimoireMode bool // grimoire list modal (spells then tricks)
 	grimoireSel  int  // cursor in the grimoire list
-
-	spellMode   bool // spell edit modal active
-	spellActive int  // active field; see spellField* constants
-	spellIndex  int  // index into char.Grimoire being edited
-	spellName   textinput.Model
-	spellRank   textinput.Model
-	spellRange  textinput.Model
-	spellReq    textinput.Model
-	spellDesc   textinput.Model
-
-	trickMode   bool // magic-trick edit modal active
-	trickActive int  // active field; see trickField* constants
-	trickIndex  int  // index into char.MagicTricks being edited
-	trickName   textinput.Model
-	trickDesc   textinput.Model
 
 	prereqMode   bool            // multi-select picker for a spell's prerequisite spells
 	prereqIndex  int             // grimoire index whose prerequisites are being edited
 	prereqChosen map[string]bool // spell name -> selected
 
-	spellDetailMode bool        // read-only spell description popup
-	detailSpell     model.Spell // spell shown in the detail popup
+	detailSpell model.Spell      // shown when activeDetailContent == detailContentSpell
+	detailTrick model.MagicTrick // shown when activeDetailContent == detailContentTrick
 
-	trickDetailMode bool             // read-only trick description popup
-	detailTrick     model.MagicTrick // trick shown in the detail popup
+	// Generic multi-field edit modal. modalMode is true while any edit modal is
+	// open (weakness, item, ability, spell, trick). activeModal holds all inputs and
+	// callbacks; a new modal is built from the relevant newXModal builder on open.
+	modalMode   bool
+	activeModal editModal
 }
 
 // namePick is one row in the grimoire add picker: name is the underlying predefined
@@ -562,98 +586,9 @@ func New(c *model.Character, path string) Model {
 	textInput := textinput.New()
 	textInput.CharLimit = 256
 
-	weaknessName := textinput.New()
-	weaknessName.CharLimit = 256
-	weaknessName.SetWidth(40)
-
-	weaknessDesc := textinput.New()
-	weaknessDesc.CharLimit = 512
-	weaknessDesc.SetWidth(60)
-
-	abilityName := textinput.New()
-	abilityName.CharLimit = 256
-	abilityName.SetWidth(40)
-
-	abilityCost := textinput.New()
-	abilityCost.CharLimit = 4
-	abilityCost.SetWidth(6)
-
-	abilityDesc := textinput.New()
-	abilityDesc.CharLimit = 512
-	abilityDesc.SetWidth(60)
-
-	spellName := textinput.New()
-	spellName.CharLimit = 256
-	spellName.SetWidth(40)
-
-	spellRank := textinput.New()
-	spellRank.CharLimit = 4
-	spellRank.SetWidth(6)
-
-	spellRange := textinput.New()
-	spellRange.CharLimit = 64
-	spellRange.SetWidth(30)
-
-	spellReq := textinput.New()
-	spellReq.CharLimit = 256
-	spellReq.SetWidth(40)
-
-	spellDesc := textinput.New()
-	spellDesc.CharLimit = 512
-	spellDesc.SetWidth(60)
-
-	trickName := textinput.New()
-	trickName.CharLimit = 256
-	trickName.SetWidth(40)
-
-	trickDesc := textinput.New()
-	trickDesc.CharLimit = 512
-	trickDesc.SetWidth(60)
-
-	itemName := textinput.New()
-	itemName.CharLimit = 256
-	itemName.SetWidth(40)
-	itemWeight := textinput.New()
-	itemWeight.CharLimit = 3
-	itemWeight.SetWidth(5)
-	itemRating := textinput.New()
-	itemRating.CharLimit = 3
-	itemRating.SetWidth(5)
-	itemRange := textinput.New()
-	itemRange.CharLimit = 4
-	itemRange.SetWidth(6)
-	itemDamage := textinput.New()
-	itemDamage.CharLimit = 32
-	itemDamage.SetWidth(16)
-	itemDur := textinput.New()
-	itemDur.CharLimit = 3
-	itemDur.SetWidth(5)
-	itemFeatures := textinput.New()
-	itemFeatures.CharLimit = 256
-	itemFeatures.SetWidth(40)
-
 	m := Model{
 		char:            c,
 		path:            path,
-		weaknessName:    weaknessName,
-		weaknessDesc:    weaknessDesc,
-		abilityName:     abilityName,
-		abilityCost:     abilityCost,
-		abilityDesc:     abilityDesc,
-		spellName:       spellName,
-		spellRank:       spellRank,
-		spellRange:      spellRange,
-		spellReq:        spellReq,
-		spellDesc:       spellDesc,
-		trickName:       trickName,
-		trickDesc:       trickDesc,
-		itemName:        itemName,
-		itemWeight:      itemWeight,
-		itemRating:      itemRating,
-		itemRange:       itemRange,
-		itemDamage:      itemDamage,
-		itemDur:         itemDur,
-		itemFeatures:    itemFeatures,
 		pickEquipSource: -1,
 	}
 	m.textInput = textInput

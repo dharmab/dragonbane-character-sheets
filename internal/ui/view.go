@@ -31,15 +31,15 @@ var (
 
 var (
 	styleHeader = lipgloss.NewStyle().Bold(true).Foreground(colorHeader)
-	styleDim = lipgloss.NewStyle().Foreground(colorDim)
+	styleDim    = lipgloss.NewStyle().Foreground(colorDim)
 	// Selection is shown as a reverse-video highlight rather than added "[ … ]"
 	// brackets: brackets change the character count, which shifts every field to
 	// the right of the selection out of alignment. Reverse video marks the field
 	// in place without changing its width.
-	styleSelected  = lipgloss.NewStyle().Reverse(true).Bold(true)
-	styleEdit = lipgloss.NewStyle().Bold(true).Foreground(colorEdit)
-	styleColumn  = lipgloss.NewStyle().Foreground(colorDim)
-	styleWarn = lipgloss.NewStyle().Foreground(colorWarn)
+	styleSelected = lipgloss.NewStyle().Reverse(true).Bold(true)
+	styleEdit     = lipgloss.NewStyle().Bold(true).Foreground(colorEdit)
+	styleColumn   = lipgloss.NewStyle().Foreground(colorDim)
+	styleWarn     = lipgloss.NewStyle().Foreground(colorWarn)
 )
 
 func (m Model) View() tea.View {
@@ -48,41 +48,36 @@ func (m Model) View() tea.View {
 	return v
 }
 
+// render is the main dispatch: if any modal/overlay is active, it delegates to
+// that view; otherwise it renders the full character sheet with a scrollable body
+// and a pinned status bar.
+//
+// The sheet is built as a list of section "chunks" (each tagged with its section
+// constant). The focused field's section determines a focusLine, and the viewport
+// is scrolled to keep that line vertically centered.
 func (m Model) render() string {
-	if m.picking {
+	// Overlay dispatch — mirrors the precedence order in handleKey.
+	// modeInlineEdit and modeBrowse both show the full sheet (the inline editor
+	// renders inside the sheet's field cells), so they fall through.
+	switch m.currentMode() {
+	case modePicker:
 		return m.viewPicker()
-	}
-	if m.detailMode {
-		return m.viewAbilityDetail()
-	}
-	if m.reqMode {
-		return m.viewReqPicker()
-	}
-	if m.abilityMode {
-		return m.viewAbilityEdit()
-	}
-	if m.weaknessMode {
-		return m.viewWeaknessEdit()
-	}
-	if m.itemMode {
-		return m.viewItemEdit()
-	}
-	if m.spellDetailMode {
-		return m.viewSpellDetail()
-	}
-	if m.trickDetailMode {
-		return m.viewTrickDetail()
-	}
-	if m.prereqMode {
+	case modeDetail:
+		switch m.activeDetailContent {
+		case detailContentSpell:
+			return m.viewSpellDetail()
+		case detailContentTrick:
+			return m.viewTrickDetail()
+		default: // detailContentAbility
+			return m.viewAbilityDetail()
+		}
+	case modePrereqPicker:
 		return m.viewPrereqPicker()
-	}
-	if m.spellMode {
-		return m.viewSpellEdit()
-	}
-	if m.trickMode {
-		return m.viewTrickEdit()
-	}
-	if m.grimoireMode {
+	case modeReqPicker:
+		return m.viewReqPicker()
+	case modeEditModal:
+		return m.activeModal.view()
+	case modeGrimoire:
 		return m.viewGrimoire()
 	}
 
@@ -94,6 +89,8 @@ func (m Model) render() string {
 
 	sep := styleDim.Render(strings.Repeat("─", w)) + "\n"
 
+	// secChunk associates rendered text with the section constants it covers, so the
+	// scroll logic can find which chunk the focused field lives in.
 	type secChunk struct {
 		text string
 		secs []int
@@ -113,6 +110,7 @@ func (m Model) render() string {
 	statusBar := sep + m.viewStatus()
 	statusLines := strings.Split(strings.TrimRight(statusBar, "\n"), "\n")
 
+	// Flatten all chunk lines and record the first line of the focused section.
 	curSec := m.currentField().section
 	var allLines []string
 	focusLine := 0
@@ -128,9 +126,11 @@ func (m Model) render() string {
 	join := func(lines []string) string { return strings.Join(lines, "\n") }
 
 	if h == 0 {
+		// No terminal height yet (first frame before WindowSizeMsg): render everything.
 		return join(allLines) + "\n" + join(statusLines)
 	}
 
+	// Scroll to keep focusLine vertically centered in the available content height.
 	contentH := max(1, h-len(statusLines))
 	scrollY := 0
 	if len(allLines) > contentH {
@@ -166,24 +166,27 @@ func (m Model) viewAbilityPicker() string {
 	return b.String()
 }
 
+// viewPicker renders the active list picker. The picker kind determines which
+// specialized view is used; a generic enum picker falls through to a standard
+// scrollable list with a title derived from the focused field's group.
 func (m Model) viewPicker() string {
-	if m.pickAbility {
+	switch m.activePickerKind {
+	case pickerAbility:
 		return m.viewAbilityPicker()
-	}
-	if m.pickMagic {
+	case pickerMagic:
 		return m.viewMagicPicker("Add to Grimoire")
 	}
 	var title string
-	switch {
-	case m.pickMagicSkill:
+	switch m.activePickerKind {
+	case pickerMagicSkill:
 		title = "  Add Magic Skill"
-	case m.pickEquipSource >= 0:
+	case pickerEquip:
 		name := m.char.Inventory[m.pickEquipSource].Name
 		if name == "" {
 			name = unnamed
 		}
 		title = "  Equip to slot: " + name
-	default:
+	default: // pickerEnum: title from the focused field's group
 		switch m.currentField().id.group {
 		case groupKin:
 			title = "  Select Kin"
@@ -219,117 +222,27 @@ func (m Model) viewIdentity() string {
 		weaknessName = noneLabel
 	}
 	return fmt.Sprintf(" Name: %s   Age: %s   Kin: %s   Profession: %s   Weakness: %s   %s   %s\n",
-		m.ftext(idName, m.char.Name),
-		m.fenum(idAge, string(m.char.Age)),
-		m.fenum(idKin, string(m.char.Kin)),
-		m.fenum(idProfession, string(m.char.Profession)),
-		m.ftext(idWeaknessName, weaknessName),
-		m.fbool(idRestRound, "Used Round Rest", m.char.UsedRoundRest),
-		m.fbool(idRestStretch, "Used Stretch Rest", m.char.UsedShiftRest),
+		m.formatText(idName, m.char.Name),
+		m.formatEnum(idAge, string(m.char.Age)),
+		m.formatEnum(idKin, string(m.char.Kin)),
+		m.formatEnum(idProfession, string(m.char.Profession)),
+		m.formatText(idWeaknessName, weaknessName),
+		m.formatBool(idRestRound, "Used Round Rest", m.char.UsedRoundRest),
+		m.formatBool(idRestStretch, "Used Stretch Rest", m.char.UsedShiftRest),
 	)
 }
 
-func (m Model) viewWeaknessEdit() string {
-	var b strings.Builder
-	sep := styleDim.Render(strings.Repeat("─", 60))
-	b.WriteString(styleHeader.Render(" WEAKNESS") + "\n")
-	b.WriteString(sep + "\n")
-	if m.weaknessActive == 0 {
-		b.WriteString(" Name: " + styleEdit.Render(m.weaknessName.View()) + "\n")
-		b.WriteString(" Desc: " + styleDim.Render(m.char.Weakness.Description) + "\n")
-	} else {
-		b.WriteString(" Name: " + m.char.Weakness.Name + "\n")
-		b.WriteString(" Desc: " + styleEdit.Render(m.weaknessDesc.View()) + "\n")
-	}
-	b.WriteString(sep + "\n")
-	b.WriteString(styleDim.Render("  ↑↓ next   enter/esc done") + "\n")
-	return b.String()
-}
-
-// viewItemEdit renders the item edit modal, showing only the stat fields that
-// apply to the item's current category.
-func (m Model) viewItemEdit() string {
-	item := m.itemTarget
-	if item == nil {
-		return ""
-	}
-	var b strings.Builder
-	sep := styleDim.Render(strings.Repeat("─", 60))
-	b.WriteString(styleHeader.Render(" ITEM") + "\n")
-	b.WriteString(sep + "\n")
-
-	textField := func(active int, label, val, view string) {
-		if m.itemActive == active {
-			b.WriteString(" " + label + ": " + styleEdit.Render(view) + "\n")
-			return
-		}
-		if val == "" {
-			val = styleDim.Render("(empty)")
-		}
-		b.WriteString(" " + label + ": " + val + "\n")
-	}
-	enumField := func(active int, label, val string) {
-		if m.itemActive == active {
-			b.WriteString(styleSelected.Render(" "+label+": "+val) + "   " + styleDim.Render("(←/→ change)") + "\n")
-			return
-		}
-		b.WriteString(" " + label + ": " + val + "\n")
-	}
-	boolField := func(active int, label string, val bool) {
-		check := "[ ] " + label
-		if val {
-			check = "[x] " + label
-		}
-		if m.itemActive == active {
-			b.WriteString(" " + styleSelected.Render(check) + "\n")
-			return
-		}
-		b.WriteString(" " + check + "\n")
-	}
-
-	textField(itemFieldName, "Name", item.Name, m.itemName.View())
-	textField(itemFieldWeight, "Weight", strconv.Itoa(item.Weight), m.itemWeight.View())
-	cat := string(item.Category)
-	if cat == "" {
-		cat = noneLabel
-	}
-	enumField(itemFieldCategory, "Category", cat)
-
-	switch item.Category {
-	case model.ItemCategoryArmor:
-		textField(itemFieldRating, "Armor Rating", strconv.Itoa(item.ArmorRating), m.itemRating.View())
-		boolField(itemFieldBaneSneak, "Bane on Sneaking", item.BaneToSneaking)
-		boolField(itemFieldBaneEvade, "Bane on Evade", item.BaneToEvade)
-		boolField(itemFieldBaneAcro, "Bane on Acrobatics", item.BaneToAcrobatics)
-	case model.ItemCategoryHelmet:
-		textField(itemFieldRating, "Armor Rating", strconv.Itoa(item.ArmorRating), m.itemRating.View())
-		boolField(itemFieldBaneAware, "Bane on Awareness", item.BaneToAwareness)
-		boolField(itemFieldBaneRanged, "Bane on Ranged Attacks", item.BaneToRanged)
-	case model.ItemCategoryWeapon:
-		enumField(itemFieldGrip, "Grip", dash(string(item.Grip)))
-		textField(itemFieldRange, "Range", strconv.Itoa(item.Range), m.itemRange.View())
-		textField(itemFieldDamage, "Damage", item.Damage, m.itemDamage.View())
-		textField(itemFieldDur, "Durability", strconv.Itoa(item.Durability), m.itemDur.View())
-		textField(itemFieldFeatures, "Features", strings.Join(item.Features, ", "), m.itemFeatures.View())
-	case model.ItemCategoryGeneric: // uncategorized: no extra fields
-	}
-
-	b.WriteString(sep + "\n")
-	b.WriteString(styleDim.Render("  ↑↓ next   ←/→ change enum   space toggle   enter/esc done") + "\n")
-	return b.String()
-}
-
-// col1W is the shared left-column width used by all multi-column sections,
-// so their dividers land on the same terminal column.
-// 78 is the minimum needed to fit a pair of general skills.
-func col1W(termW int) int { return max(78, termW/2) }
+// column1Width returns the shared left-column width used by all multi-column
+// sections, so their dividers land on the same terminal column.
+// 78 is the minimum needed to fit a pair of general skills side by side.
+func column1Width(termW int) int { return max(78, termW/2) }
 
 func (m Model) viewAttrResources(w int) string {
 	// leftWidth=36: first divider (at col leftWidth+1=37) aligns with the inner skill-pair
 	// column split, which sits at col 37 (leading space + 34-wide skill cell + "  │").
 	// midWidth: second divider aligns with the outer general/weapon skill split (col col1W+1).
 	const leftWidth = 36
-	midWidth := col1W(w) - leftWidth - 3
+	midWidth := column1Width(w) - leftWidth - 3
 
 	attrLines := []string{
 		styleHeader.Render(" ATTRIBUTES"),
@@ -346,8 +259,8 @@ func (m Model) viewAttrResources(w int) string {
 	derivedLines := []string{
 		styleHeader.Render(" DERIVED"),
 		fmt.Sprintf(" HP %s / %d   WP %s / %d",
-			m.fnum(idCurrentHP, m.char.CurrentHP), maxHP,
-			m.fnum(idCurrentWP, m.char.CurrentWP), maxWP),
+			m.formatInt(idCurrentHP, m.char.CurrentHP), maxHP,
+			m.formatInt(idCurrentWP, m.char.CurrentWP), maxWP),
 		fmt.Sprintf(" Movement: %dm", model.Movement(m.char.Kin, agl)),
 		fmt.Sprintf(" STR Bonus: %s   AGL Bonus: %s",
 			model.DamageBonus(str),
@@ -363,13 +276,13 @@ func (m Model) viewAttrResources(w int) string {
 		li, ri := 2*r, 2*r+1
 		lc, rc := conditionOrder[li], conditionOrder[ri]
 		condLines = append(condLines, " "+
-			condLeft.Render(m.fbool(idCondition(li), lc.name, *lc.ptr(m.char)))+
-			m.fbool(idCondition(ri), rc.name, *rc.ptr(m.char)))
+			condLeft.Render(m.formatBool(idCondition(li), lc.name, *lc.ptr(m.char)))+
+			m.formatBool(idCondition(ri), rc.name, *rc.ptr(m.char)))
 	}
 
 	leftCol := lipgloss.NewStyle().Width(leftWidth)
 	midCol := lipgloss.NewStyle().Width(midWidth)
-	div := styleColumn.Render("│")
+	columnDivider := styleColumn.Render("│")
 	n := max(max(len(attrLines), len(derivedLines)), len(condLines))
 	lines := make([]string, 0, n)
 	for i := range n {
@@ -383,7 +296,7 @@ func (m Model) viewAttrResources(w int) string {
 		if i < len(condLines) {
 			r = condLines[i]
 		}
-		lines = append(lines, leftCol.Render(l)+" "+div+" "+midCol.Render(mid)+" "+div+" "+r)
+		lines = append(lines, leftCol.Render(l)+" "+columnDivider+" "+midCol.Render(mid)+" "+columnDivider+" "+r)
 	}
 	return strings.Join(lines, "\n") + "\n"
 }
@@ -395,23 +308,28 @@ func (m Model) attrRow(i1, i2 int) string {
 	// stays put whether the first value is one or two digits.
 	cell := lipgloss.NewStyle().Width(2).Align(lipgloss.Right)
 	return fmt.Sprintf(" %s %s   %s %s",
-		a1, cell.Render(m.fnum(idAttribute(i1), m.char.Attributes[a1])),
-		a2, m.fnum(idAttribute(i2), m.char.Attributes[a2]),
+		a1, cell.Render(m.formatInt(idAttribute(i1), m.char.Attributes[a1])),
+		a2, m.formatInt(idAttribute(i2), m.char.Attributes[a2]),
 	)
 }
 
+// viewSkills renders the Skills section as two side-by-side columns: general skills
+// on the left, weapon skills on the right. Within the general-skills column, skills
+// are paired left-right (two per row) to save vertical space.
 func (m Model) viewSkills(w int) string {
-	const nameW, lvlW = 20, 3
-	nameCol := lipgloss.NewStyle().Width(nameW)
-	lvlCol := lipgloss.NewStyle().Width(lvlW).Align(lipgloss.Right)
-	div := "  " + styleColumn.Render("│") + "  "
-	colHdrStr := fmt.Sprintf(" %-*s %-3s  %*s  %-3s", nameW, "Name", "Atr", lvlW, "Lvl", "Adv")
-	colHdr := styleDim.Render(colHdrStr)
-	pairHdr := colHdr + div + styleDim.Render(strings.TrimPrefix(colHdrStr, " "))
+	const nameWidth, levelWidth = 20, 3
+	nameCol := lipgloss.NewStyle().Width(nameWidth)
+	levelCol := lipgloss.NewStyle().Width(levelWidth).Align(lipgloss.Right)
+	// pairDivider separates the two skills within a paired row.
+	pairDivider := "  " + styleColumn.Render("│") + "  "
+	columnHeaderStr := fmt.Sprintf(" %-*s %-3s  %*s  %-3s", nameWidth, "Name", "Atr", levelWidth, "Lvl", "Adv")
+	columnHeader := styleDim.Render(columnHeaderStr)
+	// pairHeader is two column headers joined by pairDivider, used above paired rows.
+	pairHeader := columnHeader + pairDivider + styleDim.Render(strings.TrimPrefix(columnHeaderStr, " "))
 
 	skillCell := func(i int) string {
 		sk := m.char.Skills[i]
-		lvlStr := m.fnum(idSkillLevel(i), sk.Level)
+		levelStr := m.formatInt(idSkillLevel(i), sk.Level)
 		adv := checkEmpty
 		if sk.Advanced {
 			adv = checkFull
@@ -419,22 +337,24 @@ func (m Model) viewSkills(w int) string {
 		if m.focused(idSkillAdvanced(i)) {
 			adv = styleSelected.Render(adv)
 		}
-		return nameCol.Render(sk.Name) + " " + string(sk.Attribute) + "  " + lvlCol.Render(lvlStr) + "  " + adv
+		return nameCol.Render(sk.Name) + " " + string(sk.Attribute) + "  " + levelCol.Render(levelStr) + "  " + adv
 	}
 
+	// renderSection pairs skills two-per-row and returns the resulting lines.
+	// Skills are paired by index: row r shows indices[r] and indices[r+nRows].
 	renderSection := func(title string, indices []int) []string {
 		n := len(indices)
 		nRows := (n + 1) / 2
-		slines := make([]string, 0, 2+nRows)
-		slines = append(slines, styleHeader.Render(title), pairHdr)
+		sectionLines := make([]string, 0, 2+nRows)
+		sectionLines = append(sectionLines, styleHeader.Render(title), pairHeader)
 		for r := range nRows {
 			row := " " + skillCell(indices[r])
 			if ri := r + nRows; ri < n {
-				row += div + skillCell(indices[ri])
+				row += pairDivider + skillCell(indices[ri])
 			}
-			slines = append(slines, row)
+			sectionLines = append(sectionLines, row)
 		}
-		return slines
+		return sectionLines
 	}
 
 	var general, weapon []int
@@ -450,31 +370,32 @@ func (m Model) viewSkills(w int) string {
 		return styleHeader.Render(" SKILLS") + "\n" + styleDim.Render(" (none)") + "\n"
 	}
 
-	genLines := renderSection(" SKILLS", general)
+	generalLines := renderSection(" SKILLS", general)
 	if len(weapon) == 0 {
-		return strings.Join(genLines, "\n") + "\n"
+		return strings.Join(generalLines, "\n") + "\n"
 	}
-	weapLines := func() []string {
-		slines := make([]string, 0, 2+len(weapon))
-		slines = append(slines, styleHeader.Render(" WEAPON SKILLS"), colHdr)
+	// Weapon skills are not paired: each weapon skill occupies its own row.
+	weaponLines := func() []string {
+		sectionLines := make([]string, 0, 2+len(weapon))
+		sectionLines = append(sectionLines, styleHeader.Render(" WEAPON SKILLS"), columnHeader)
 		for _, i := range weapon {
-			slines = append(slines, " "+skillCell(i))
+			sectionLines = append(sectionLines, " "+skillCell(i))
 		}
-		return slines
+		return sectionLines
 	}()
 
-	leftCol := lipgloss.NewStyle().Width(col1W(w))
-	mainDiv := styleColumn.Render("│")
+	leftCol := lipgloss.NewStyle().Width(column1Width(w))
+	mainDivider := styleColumn.Render("│")
 	var lines []string
-	for i := range max(len(genLines), len(weapLines)) {
+	for i := range max(len(generalLines), len(weaponLines)) {
 		l, r := "", ""
-		if i < len(genLines) {
-			l = genLines[i]
+		if i < len(generalLines) {
+			l = generalLines[i]
 		}
-		if i < len(weapLines) {
-			r = weapLines[i]
+		if i < len(weaponLines) {
+			r = weaponLines[i]
 		}
-		lines = append(lines, leftCol.Render(l)+" "+mainDiv+" "+r)
+		lines = append(lines, leftCol.Render(l)+" "+mainDivider+" "+r)
 	}
 
 	return strings.Join(lines, "\n") + "\n"
@@ -492,7 +413,7 @@ func (m Model) viewGear() string {
 		if name == "" {
 			name = "—"
 		}
-		return nameCol.Render(m.ftext(id, name))
+		return nameCol.Render(m.formatText(id, name))
 	}
 	// AR, banes, grip, damage and range don't change in play, so they are
 	// read-only here (edit them in the item modal); only durability is focusable.
@@ -549,7 +470,7 @@ func (m Model) viewGear() string {
 		lines = append(lines, " "+nameCell(idWeaponAtHand(i), w.Name)+" "+
 			gripCol.Render(grip)+" "+dmgCol.Render(dmg)+" "+
 			rngCol.Render(strconv.Itoa(w.Range)+"m")+" "+
-			numCol.Render(m.fnum(idWeaponDurability(i), w.Durability))+"  "+
+			numCol.Render(m.formatInt(idWeaponDurability(i), w.Durability))+"  "+
 			strings.Join(w.Features, ", "))
 	}
 
@@ -566,11 +487,11 @@ func dash(s string) string {
 }
 
 func (m Model) viewInventoryAndTiny(w int) string {
-	invWidth := col1W(w)
+	invWidth := column1Width(w)
 	invLines := strings.Split(strings.TrimRight(m.viewInventory(), "\n"), "\n")
 	tinyLines := strings.Split(strings.TrimRight(m.viewTinyItems(), "\n"), "\n")
 	invCol := lipgloss.NewStyle().Width(invWidth)
-	div := styleColumn.Render("│")
+	columnDivider := styleColumn.Render("│")
 	lines := make([]string, 0, max(len(invLines), len(tinyLines)))
 	for i := range max(len(invLines), len(tinyLines)) {
 		l, r := "", ""
@@ -580,7 +501,7 @@ func (m Model) viewInventoryAndTiny(w int) string {
 		if i < len(tinyLines) {
 			r = tinyLines[i]
 		}
-		lines = append(lines, invCol.Render(l)+" "+div+" "+r)
+		lines = append(lines, invCol.Render(l)+" "+columnDivider+" "+r)
 	}
 	return strings.Join(lines, "\n") + "\n"
 }
@@ -600,7 +521,7 @@ func (m Model) viewInventory() string {
 	lines = append(lines, styleHeader.Render(" INVENTORY")+"  "+slotInfo)
 
 	if len(m.char.Inventory) == 0 {
-		lines = append(lines, " "+m.ftext(idInventoryEmpty, "(no items — press 'a' to add)"))
+		lines = append(lines, " "+m.formatText(idInventoryEmpty, "(no items — press 'a' to add)"))
 	} else {
 		// Weight first in a narrow right-aligned column, then the name takes the
 		// rest of the row.
@@ -611,8 +532,8 @@ func (m Model) viewInventory() string {
 			if name == "" {
 				name = unnamed
 			}
-			weightCell := wtCol.Render(m.fnum(idInventoryWeight(i), item.Weight))
-			lines = append(lines, " "+weightCell+"  "+m.ftext(idInventoryName(i), name))
+			weightCell := wtCol.Render(m.formatInt(idInventoryWeight(i), item.Weight))
+			lines = append(lines, " "+weightCell+"  "+m.formatText(idInventoryName(i), name))
 		}
 		lines = append(lines, styleDim.Render(" a add   x remove   d don item → gear slot"))
 	}
@@ -624,14 +545,14 @@ func (m Model) viewTinyItems() string {
 	var lines []string
 	lines = append(lines, styleHeader.Render(" TINY ITEMS"))
 	if len(m.char.TinyItems) == 0 {
-		lines = append(lines, " "+m.ftext(idTinyEmpty, "(none — press 'a' to add)"))
+		lines = append(lines, " "+m.formatText(idTinyEmpty, "(none — press 'a' to add)"))
 	} else {
 		for i, name := range m.char.TinyItems {
 			display := name
 			if display == "" {
 				display = unnamed
 			}
-			lines = append(lines, " "+m.ftext(idTiny(i), display))
+			lines = append(lines, " "+m.formatText(idTiny(i), display))
 		}
 		lines = append(lines, styleDim.Render(" a add   x remove"))
 	}
@@ -639,13 +560,13 @@ func (m Model) viewTinyItems() string {
 }
 
 func (m Model) viewHeroicAbilities() string {
-	const nameW, costW = 24, 2
-	nameCol := lipgloss.NewStyle().Width(nameW)
-	costCol := lipgloss.NewStyle().Width(costW).Align(lipgloss.Right)
+	const nameWidth, costWidth = 24, 2
+	nameCol := lipgloss.NewStyle().Width(nameWidth)
+	costCol := lipgloss.NewStyle().Width(costWidth).Align(lipgloss.Right)
 
 	var lines []string
 	lines = append(lines, styleHeader.Render(" HEROIC ABILITIES"))
-	lines = append(lines, styleDim.Render(fmt.Sprintf(" %-*s %*s", nameW, "Name", costW, "WP")))
+	lines = append(lines, styleDim.Render(fmt.Sprintf(" %-*s %*s", nameWidth, "Name", costWidth, "WP")))
 
 	// row renders one ability line. id is the field used for focus highlighting.
 	// Requirements are shown only in the add/edit flow, not here.
@@ -678,7 +599,7 @@ func (m Model) viewHeroicAbilities() string {
 		}
 	}
 	if len(model.KinAbilities(m.char.Kin)) == 0 && len(m.char.HeroicAbilities) == 0 {
-		lines = append(lines, " "+m.ftext(idHeroicAbilityEmpty, "(none — press 'a' to add)"))
+		lines = append(lines, " "+m.formatText(idHeroicAbilityEmpty, "(none — press 'a' to add)"))
 	}
 
 	lines = append(lines, styleDim.Render(" a add   x remove   enter view/edit   =/- stack"))
@@ -729,41 +650,6 @@ func wrapText(s string, width int) string {
 	return b.String()
 }
 
-func (m Model) viewAbilityEdit() string {
-	a := m.char.HeroicAbilities[m.abilityIndex]
-	var b strings.Builder
-	sep := styleDim.Render(strings.Repeat("─", 64))
-	b.WriteString(styleHeader.Render(" HEROIC ABILITY") + "\n")
-	b.WriteString(sep + "\n")
-
-	textField := func(active int, label, val, view string) string {
-		if m.abilityActive == active {
-			return " " + label + ": " + styleEdit.Render(view) + "\n"
-		}
-		if val == "" {
-			val = styleDim.Render("(empty)")
-		}
-		return " " + label + ": " + val + "\n"
-	}
-	b.WriteString(textField(0, "Name", a.Name, m.abilityName.View()))
-	b.WriteString(textField(1, "WP Cost", strconv.Itoa(a.WPCost), m.abilityCost.View()))
-	b.WriteString(textField(2, "Desc", a.Description, m.abilityDesc.View()))
-
-	req := noneLabel
-	if label := model.RequirementLabel(a.Requirements); label != "" {
-		req = label
-	}
-	reqLine := " Requires: " + req
-	if m.abilityActive == 3 {
-		reqLine = styleSelected.Render(" Requires: " + req)
-	}
-	b.WriteString(reqLine + "   " + styleDim.Render("(enter to choose)") + "\n")
-
-	b.WriteString(sep + "\n")
-	b.WriteString(styleDim.Render("  ↑↓ next   enter edit reqs / done   esc done") + "\n")
-	return b.String()
-}
-
 func (m Model) viewReqPicker() string {
 	var b strings.Builder
 	b.WriteString(styleHeader.Render("  Required Skills — any one satisfies") + "\n")
@@ -790,16 +676,16 @@ func (m Model) viewReqPicker() string {
 // viewMagic renders the two-column Magic section: known magic skills on the left,
 // prepared spells (with the INT-based count) on the right.
 func (m Model) viewMagic(w int) string {
-	const nameW, lvlW = 20, 3
-	nameCol := lipgloss.NewStyle().Width(nameW)
-	lvlCol := lipgloss.NewStyle().Width(lvlW).Align(lipgloss.Right)
+	const nameWidth, levelWidth = 20, 3
+	nameCol := lipgloss.NewStyle().Width(nameWidth)
+	levelCol := lipgloss.NewStyle().Width(levelWidth).Align(lipgloss.Right)
 
 	var leftLines []string
 	leftLines = append(leftLines, styleHeader.Render(" MAGIC SKILLS"))
 	if len(m.char.MagicSkills) == 0 {
-		leftLines = append(leftLines, " "+m.ftext(idMagicEmpty, "(none — press 'a' to add)"))
+		leftLines = append(leftLines, " "+m.formatText(idMagicEmpty, "(none — press 'a' to add)"))
 	} else {
-		leftLines = append(leftLines, styleDim.Render(fmt.Sprintf(" %-*s %-3s  %*s  %-3s", nameW, "Name", "Atr", lvlW, "Lvl", "Adv")))
+		leftLines = append(leftLines, styleDim.Render(fmt.Sprintf(" %-*s %-3s  %*s  %-3s", nameWidth, "Name", "Atr", levelWidth, "Lvl", "Adv")))
 		for i, skill := range m.char.MagicSkills {
 			adv := checkEmpty
 			if skill.Advanced {
@@ -809,7 +695,7 @@ func (m Model) viewMagic(w int) string {
 				adv = styleSelected.Render(adv)
 			}
 			leftLines = append(leftLines, " "+nameCol.Render(skill.Name)+" "+string(skill.Attribute)+"  "+
-				lvlCol.Render(m.fnum(idMagicSkillLevel(i), skill.Level))+"  "+adv)
+				levelCol.Render(m.formatInt(idMagicSkillLevel(i), skill.Level))+"  "+adv)
 		}
 	}
 	leftLines = append(leftLines, styleDim.Render(" a add skill   x remove"))
@@ -825,20 +711,20 @@ func (m Model) viewMagic(w int) string {
 	// Prepared spells and always-castable magic tricks, sorted alphabetically together.
 	entries := preparedColumnOrder(m.char)
 	if len(entries) == 0 {
-		rightLines = append(rightLines, " "+m.ftext(idPreparedEmpty, "(none — press 'g' to open grimoire)"))
+		rightLines = append(rightLines, " "+m.formatText(idPreparedEmpty, "(none — press 'g' to open grimoire)"))
 	} else {
 		for _, entry := range entries {
 			name := entry.name
 			if name == "" {
 				name = unnamed
 			}
-			rightLines = append(rightLines, " "+m.ftext(entry.id, name))
+			rightLines = append(rightLines, " "+m.formatText(entry.id, name))
 		}
 	}
 	rightLines = append(rightLines, styleDim.Render(" g study/record in grimoire"))
 
-	leftCol := lipgloss.NewStyle().Width(col1W(w))
-	div := styleColumn.Render("│")
+	leftCol := lipgloss.NewStyle().Width(column1Width(w))
+	columnDivider := styleColumn.Render("│")
 	lines := make([]string, 0, max(len(leftLines), len(rightLines)))
 	for i := range max(len(leftLines), len(rightLines)) {
 		l, r := "", ""
@@ -848,7 +734,7 @@ func (m Model) viewMagic(w int) string {
 		if i < len(rightLines) {
 			r = rightLines[i]
 		}
-		lines = append(lines, leftCol.Render(l)+" "+div+" "+r)
+		lines = append(lines, leftCol.Render(l)+" "+columnDivider+" "+r)
 	}
 	return strings.Join(lines, "\n") + "\n"
 }
@@ -881,8 +767,8 @@ func (m Model) viewMagicPicker(title string) string {
 // viewGrimoire is the grimoire list modal: spells (with prepared checkboxes) first, then
 // magic tricks. The cursor (grimoireSel) addresses spells 0..n-1 then tricks.
 func (m Model) viewGrimoire() string {
-	const nameW = 26
-	nameCol := lipgloss.NewStyle().Width(nameW)
+	const nameWidth = 26
+	nameCol := lipgloss.NewStyle().Width(nameWidth)
 	var b strings.Builder
 	sep := styleDim.Render(strings.Repeat("─", 70))
 
@@ -935,92 +821,6 @@ func (m Model) viewGrimoire() string {
 
 	b.WriteString(sep + "\n")
 	b.WriteString(styleDim.Render("  ↑↓ move   space prepare   enter edit   a add spell/trick   x remove   esc close") + "\n")
-	return b.String()
-}
-
-func (m Model) viewSpellEdit() string {
-	spell := m.char.Spells[m.spellIndex]
-	var b strings.Builder
-	sep := styleDim.Render(strings.Repeat("─", 66))
-	b.WriteString(styleHeader.Render(" SPELL") + "\n")
-	b.WriteString(sep + "\n")
-
-	textField := func(active int, label, val, view string) string {
-		if m.spellActive == active {
-			return " " + label + ": " + styleEdit.Render(view) + "\n"
-		}
-		if val == "" {
-			val = styleDim.Render("(empty)")
-		}
-		return " " + label + ": " + val + "\n"
-	}
-	enumField := func(active int, label, val string) string {
-		if m.spellActive == active {
-			return styleSelected.Render(" "+label+": "+val) + "   " + styleDim.Render("(←/→ change)") + "\n"
-		}
-		return " " + label + ": " + val + "\n"
-	}
-
-	b.WriteString(textField(spellFieldName, "Name", spell.Name, m.spellName.View()))
-	b.WriteString(enumField(spellFieldSchool, "School", string(spell.School)))
-	b.WriteString(textField(spellFieldRank, "Rank", strconv.Itoa(spell.Rank), m.spellRank.View()))
-	b.WriteString(enumField(spellFieldCasting, "Casting Time", string(spell.CastingTime)))
-	b.WriteString(textField(spellFieldRange, "Range", spell.Range, m.spellRange.View()))
-	b.WriteString(enumField(spellFieldDuration, "Duration", string(spell.Duration)))
-	b.WriteString(textField(spellFieldReq, "Requirements", strings.Join(spell.Requirements, ", "), m.spellReq.View()))
-
-	prereq := noneLabel
-	if len(spell.Prerequisites) > 0 {
-		prereq = strings.Join(spell.Prerequisites, ", ")
-	}
-	prereqLine := " Prerequisites: " + prereq
-	if m.spellActive == spellFieldPrereq {
-		prereqLine = styleSelected.Render(" Prerequisites: "+prereq) + "   " + styleDim.Render("(enter to choose)")
-	}
-	b.WriteString(prereqLine + "\n")
-
-	b.WriteString(textField(spellFieldDesc, "Desc", spell.Description, m.spellDesc.View()))
-
-	b.WriteString(sep + "\n")
-	b.WriteString(styleDim.Render("  ↑↓ next   ←/→ change enum   enter edit prereqs / done   esc done") + "\n")
-	return b.String()
-}
-
-func (m Model) viewTrickEdit() string {
-	trick := m.char.MagicTricks[m.trickIndex]
-	var b strings.Builder
-	sep := styleDim.Render(strings.Repeat("─", 64))
-	b.WriteString(styleHeader.Render(" MAGIC TRICK") + "\n")
-	b.WriteString(sep + "\n")
-
-	if m.trickActive == trickFieldName {
-		b.WriteString(" Name: " + styleEdit.Render(m.trickName.View()) + "\n")
-	} else {
-		name := trick.Name
-		if name == "" {
-			name = styleDim.Render("(empty)")
-		}
-		b.WriteString(" Name: " + name + "\n")
-	}
-
-	if m.trickActive == trickFieldSchool {
-		b.WriteString(styleSelected.Render(" School: "+string(trick.School)) + "   " + styleDim.Render("(←/→ change)") + "\n")
-	} else {
-		b.WriteString(" School: " + string(trick.School) + "\n")
-	}
-
-	if m.trickActive == trickFieldDesc {
-		b.WriteString(" Desc: " + styleEdit.Render(m.trickDesc.View()) + "\n")
-	} else {
-		desc := trick.Description
-		if desc == "" {
-			desc = styleDim.Render("(empty)")
-		}
-		b.WriteString(" Desc: " + desc + "\n")
-	}
-
-	b.WriteString(sep + "\n")
-	b.WriteString(styleDim.Render("  ↑↓ next   ←/→ change school   enter/esc done") + "\n")
 	return b.String()
 }
 
@@ -1148,11 +948,13 @@ func (m Model) viewStatus() string {
 		save = lipgloss.NewStyle().Foreground(colorEdit).Render("● saved")
 	}
 	line := " " + m.path + "   " + save
-	hint := styleDim.Render(" arrows navigate   =/- adjust numbers   enter edit/pick   space tick   q quit")
+	hint := styleDim.Render(" arrows navigate   =/- adjust numbers   enter edit/pick   space toggle   q quit")
 	return line + "\n" + hint + "\n"
 }
 
-func (m Model) ftext(id fieldID, raw string) string {
+// formatText renders a text field, applying the selection or active-edit style
+// when the field is focused.
+func (m Model) formatText(id fieldID, raw string) string {
 	if !m.focused(id) {
 		return raw
 	}
@@ -1165,7 +967,9 @@ func (m Model) ftext(id fieldID, raw string) string {
 	return styleSelected.Render(raw)
 }
 
-func (m Model) fenum(id fieldID, raw string) string {
+// formatEnum renders an enum field, applying the selection style when focused.
+// Custom profession is shown as a live text input instead of the enum value.
+func (m Model) formatEnum(id fieldID, raw string) string {
 	if m.focused(id) {
 		if m.professionEdit {
 			return styleEdit.Render(m.textInput.View())
@@ -1175,7 +979,8 @@ func (m Model) fenum(id fieldID, raw string) string {
 	return raw
 }
 
-func (m Model) fnum(id fieldID, v int) string {
+// formatInt renders an integer field, applying the selection style when focused.
+func (m Model) formatInt(id fieldID, v int) string {
 	s := strconv.Itoa(v)
 	if m.focused(id) {
 		return styleSelected.Render(s)
@@ -1183,7 +988,9 @@ func (m Model) fnum(id fieldID, v int) string {
 	return s
 }
 
-func (m Model) fbool(id fieldID, name string, val bool) string {
+// formatBool renders a boolean field as a checkbox, applying the selection style
+// when focused.
+func (m Model) formatBool(id fieldID, name string, val bool) string {
 	check := "[ ] " + name
 	if val {
 		check = "[x] " + name

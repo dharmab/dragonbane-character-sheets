@@ -83,70 +83,48 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
+// handleKey is the browse-mode (no overlay active) key dispatcher. Overlays —
+// pickers, modals, detail popups — are handled before the browse path; browse
+// keys that are section-specific delegate to per-section helpers; generic
+// field-kind actions (=/- on ints, space on bools, enter to edit text/enums)
+// are handled last.
 func (m Model) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	key := msg.String()
 
-	if m.picking {
+	// Overlay dispatch via currentMode() — single switch replaces the old
+	// cascade of boolean checks. Precedence (outermost first) is encoded in
+	// currentMode() itself.
+	switch m.currentMode() {
+	case modePicker:
 		return m.handlePickerKey(key)
-	}
-
-	if m.spellDetailMode {
-		if key == keyQuit {
-			return m, tea.Quit
-		}
-		m.spellDetailMode = false
-		return m, nil
-	}
-
-	if m.trickDetailMode {
-		if key == keyQuit {
-			return m, tea.Quit
-		}
-		m.trickDetailMode = false
-		return m, nil
-	}
-
-	if m.prereqMode {
-		return m.handlePrereqKey(key)
-	}
-
-	if m.spellMode {
-		return m.handleSpellKey(msg)
-	}
-
-	if m.trickMode {
-		return m.handleTrickKey(msg)
-	}
-
-	if m.grimoireMode {
-		return m.handleGrimoireKey(key)
-	}
-
-	if m.detailMode {
+	case modeDetail:
+		// All three detail popups (ability, spell, trick) share the same keys:
+		// ctrl+c quits, anything else closes the popup.
 		if key == keyQuit {
 			return m, tea.Quit
 		}
 		m.detailMode = false
 		return m, nil
-	}
-
-	if m.reqMode {
+	case modePrereqPicker:
+		return m.handlePrereqKey(key)
+	case modeReqPicker:
 		return m.handleReqKey(key)
-	}
-
-	if m.abilityMode {
-		return m.handleAbilityKey(msg)
-	}
-
-	if m.weaknessMode {
-		return m.handleWeaknessKey(msg)
-	}
-
-	if m.itemMode {
-		return m.handleItemKey(msg)
-	}
-
-	if m.editing {
+	case modeEditModal:
+		cmd, result := m.activeModal.handleKey(msg, &m)
+		switch result {
+		case modalQuit:
+			return m, tea.Quit
+		case modalClosed:
+			if m.activeModal.onClose != nil {
+				m.activeModal.onClose(&m)
+			}
+			m.modalMode = false
+			m.autoSave()
+		}
+		return m, cmd
+	case modeGrimoire:
+		return m.handleGrimoireKey(key)
+	case modeInlineEdit:
 		switch key {
 		case keyEnter, keyEsc:
 			m.commitText()
@@ -158,8 +136,10 @@ func (m Model) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 			m.textInput, cmd = m.textInput.Update(msg)
 			return m, cmd
 		}
+		// modeBrowse: fall through to navigation and section handlers below.
 	}
 
+	// Global browse keys.
 	switch key {
 	case keyQuit, keyQuitAlt:
 		// If a write is still in flight, defer quitting until its result arrives
@@ -188,216 +168,40 @@ func (m Model) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 
 	f := m.currentField()
 
-	if f.section == sectionGear {
-		slot := m.gearSlotPtr(f.id)
-		switch key {
-		case keyDonDoff:
-			if slot != nil && slot.Name != "" {
-				m.stowGear(slot)
-				return m, nil
-			}
-		case keyEnter:
-			if slot != nil {
-				if slot.Category == model.ItemCategoryGeneric {
-					slot.Category = gearSlotCategory(f.id.group)
-				}
-				m.startItemEdit(slot)
-				return m, textinput.Blink
-			}
+	// Section-specific keys. Each handler returns handled=true when it consumes
+	// the key; unhandled keys fall through to the field-kind switch below (e.g.
+	// =/- on a weapon's durability field reaches the kindInt case via sectionGear
+	// not consuming it).
+	switch f.section {
+	case sectionGear:
+		if model, cmd, handled := m.handleGearKey(key, f); handled {
+			return model, cmd
+		}
+	case sectionInventory:
+		if model, cmd, handled := m.handleInventoryKey(key, f); handled {
+			return model, cmd
+		}
+	case sectionTinyItems:
+		if model, cmd, handled := m.handleTinyItemKey(key, f); handled {
+			return model, cmd
+		}
+	case sectionHeroic:
+		if model, cmd, handled := m.handleHeroicKey(key, f); handled {
+			return model, cmd
+		}
+	case sectionMagic:
+		if model, cmd, handled := m.handleMagicSectionKey(key, f); handled {
+			return model, cmd
 		}
 	}
 
-	if f.section == sectionInventory {
-		idx := f.id.index
-		inBounds := idx >= 0 && idx < len(m.char.Inventory)
-		switch key {
-		case keyAdd:
-			m.char.Inventory = append(m.char.Inventory, model.Item{Name: "", Weight: 1})
-			m.rebuildFields()
-			m.autoSave()
-			return m, nil
-		case keyEnter:
-			if inBounds {
-				m.startItemEdit(&m.char.Inventory[idx])
-				return m, textinput.Blink
-			}
-		case keyIncr, keyIncrAlt, keyDecr:
-			if f.id.group == groupInventoryName && inBounds {
-				base, qty := model.ParseQuantity(m.char.Inventory[idx].Name)
-				m.char.Inventory[idx].Name = model.ApplyQuantity(base, max(1, qty+signOf(key)))
-				m.autoSave()
-				return m, nil
-			}
-		case keyRemove:
-			if inBounds {
-				m.char.Inventory = append(m.char.Inventory[:idx], m.char.Inventory[idx+1:]...)
-				m.rebuildFields()
-				m.clampFocus()
-				m.autoSave()
-				return m, nil
-			}
-		case keyDonDoff:
-			if inBounds {
-				// A categorized item knows its slot, so equip it directly; only
-				// fall back to the picker for untagged items (or full weapon slots).
-				if slot, ok := m.autoEquipSlot(m.char.Inventory[idx].Category); ok {
-					m.pickEquipSource = idx
-					m.pickSelected = slot
-					m.applyEquip()
-					m.pickEquipSource = -1
-					m.autoSave()
-					return m, nil
-				}
-				m.pickEquipSource = idx
-				m.pickOptions = m.equipSlotOptions()
-				m.pickSelected = 0
-				m.picking = true
-				return m, nil
-			}
-		}
-	}
-
-	if f.section == sectionTinyItems {
-		idx := f.id.index
-		inBounds := idx >= 0 && idx < len(m.char.TinyItems)
-		switch key {
-		case keyAdd:
-			m.char.TinyItems = append(m.char.TinyItems, "")
-			m.rebuildFields()
-			m.autoSave()
-			return m, nil
-		case keyIncr, keyIncrAlt, keyDecr:
-			if inBounds {
-				base, qty := model.ParseQuantity(m.char.TinyItems[idx])
-				m.char.TinyItems[idx] = model.ApplyQuantity(base, max(1, qty+signOf(key)))
-				m.autoSave()
-				return m, nil
-			}
-		case keyRemove:
-			if inBounds {
-				m.char.TinyItems = append(m.char.TinyItems[:idx], m.char.TinyItems[idx+1:]...)
-				m.rebuildFields()
-				m.clampFocus()
-				m.autoSave()
-				return m, nil
-			}
-		}
-	}
-
-	if f.section == sectionHeroic {
-		// Kin-granted abilities are read-only; enter shows their description.
-		if f.id.group == groupKinAbility {
-			switch key {
-			case keyAdd:
-				m.openAbilityPicker()
-			case keyEnter:
-				kin := model.KinAbilities(m.char.Kin)
-				if i := f.id.index; i >= 0 && i < len(kin) {
-					m.detailAbility = kin[i]
-					m.detailMode = true
-				}
-			}
-			return m, nil
-		}
-		idx := f.id.index
-		inBounds := idx >= 0 && idx < len(m.char.HeroicAbilities)
-		switch key {
-		case keyAdd:
-			m.openAbilityPicker()
-			return m, nil
-		case keyEnter:
-			if inBounds {
-				m.startAbilityEdit(idx)
-				return m, textinput.Blink
-			}
-			return m, nil
-		case keyRemove:
-			if inBounds {
-				m.char.HeroicAbilities = append(m.char.HeroicAbilities[:idx], m.char.HeroicAbilities[idx+1:]...)
-				m.rebuildFields()
-				m.clampFocus()
-				m.char.ClampResources()
-				m.autoSave()
-				return m, nil
-			}
-		case keyIncr, keyIncrAlt, keyDecr:
-			if !inBounds {
-				return m, nil
-			}
-			// Only HP/WP-bonus abilities can be stacked via the "x N" name suffix.
-			a := m.char.HeroicAbilities[idx]
-			if a.HPBonus != 0 || a.WPBonus != 0 {
-				base, qty := model.ParseQuantity(a.Name)
-				m.char.HeroicAbilities[idx].Name = model.ApplyQuantity(base, max(1, qty+signOf(key)))
-				m.char.ClampResources()
-				m.autoSave()
-			}
-			return m, nil
-		}
-	}
-
-	if f.section == sectionMagic {
-		switch f.id.group {
-		case groupMagicSkillLevel, groupMagicSkillAdvanced:
-			switch key {
-			case keyAdd:
-				m.openMagicSkillPicker()
-				return m, nil
-			case keyRemove:
-				if i := f.id.index; i >= 0 && i < len(m.char.MagicSkills) {
-					m.char.MagicSkills = append(m.char.MagicSkills[:i], m.char.MagicSkills[i+1:]...)
-					m.rebuildFields()
-					m.clampFocus()
-					m.autoSave()
-				}
-				return m, nil
-			}
-		case groupMagicEmpty:
-			if key == keyAdd {
-				m.openMagicSkillPicker()
-				return m, nil
-			}
-		case groupPreparedSpell:
-			// 'g' opens the grimoire; it belongs to the prepared-spells column, not the
-			// magic-skills column.
-			switch key {
-			case keyGrimoire:
-				m.openGrimoire()
-				return m, nil
-			case keyEnter:
-				prepared := m.char.PreparedSpells()
-				if i := f.id.index; i >= 0 && i < len(prepared) {
-					m.detailSpell = prepared[i]
-					m.spellDetailMode = true
-				}
-				return m, nil
-			}
-		case groupPreparedTrick:
-			switch key {
-			case keyGrimoire:
-				m.openGrimoire()
-				return m, nil
-			case keyEnter:
-				if i := f.id.index; i >= 0 && i < len(m.char.MagicTricks) {
-					m.detailTrick = m.char.MagicTricks[i]
-					m.trickDetailMode = true
-				}
-				return m, nil
-			}
-		case groupPreparedEmpty:
-			if key == keyGrimoire {
-				m.openGrimoire()
-				return m, nil
-			}
-		default:
-		}
-	}
-
+	// Generic field-kind actions, shared across all sections.
 	switch f.kind {
 	case kindText:
 		if key == keyEnter {
 			if f.id.group == groupWeaknessName {
-				m.startWeaknessEdit()
+				m.activeModal = newWeaknessModal(&m)
+				m.modalMode = true
 				return m, textinput.Blink
 			}
 			m.startEditing()
@@ -427,13 +231,252 @@ func (m Model) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
+// handleGearKey handles action keys in the Gear section.
+// enter opens the item edit modal; d doffs the item to inventory.
+// Other keys (e.g. =/- for durability) are not consumed and fall through to the
+// kindInt handler in handleKey.
+func (m Model) handleGearKey(key string, f field) (tea.Model, tea.Cmd, bool) {
+	slot := m.gearSlotPtr(f.id)
+	switch key {
+	case keyDonDoff:
+		if slot != nil && slot.Name != "" {
+			m.stowGear(slot)
+			return m, nil, true
+		}
+	case keyEnter:
+		if slot != nil {
+			if slot.Category == model.ItemCategoryGeneric {
+				slot.Category = gearSlotCategory(f.id.group)
+			}
+			m.activeModal = newItemModal(&m, slot)
+			m.modalMode = true
+			return m, textinput.Blink, true
+		}
+	}
+	return m, nil, false
+}
+
+// handleInventoryKey handles action keys in the Inventory section.
+// a adds a row, x removes it, enter opens the item modal, d dons to a gear slot,
+// and =/- adjust the quantity suffix on the item name.
+func (m Model) handleInventoryKey(key string, f field) (tea.Model, tea.Cmd, bool) {
+	idx := f.id.index
+	inBounds := idx >= 0 && idx < len(m.char.Inventory)
+	switch key {
+	case keyAdd:
+		m.char.Inventory = append(m.char.Inventory, model.Item{Name: "", Weight: 1})
+		m.rebuildAfterAdd()
+		return m, nil, true
+	case keyEnter:
+		if inBounds {
+			m.activeModal = newItemModal(&m, &m.char.Inventory[idx])
+			m.modalMode = true
+			return m, textinput.Blink, true
+		}
+	case keyIncr, keyIncrAlt, keyDecr:
+		if f.id.group == groupInventoryName && inBounds {
+			m.char.Inventory[idx].Name = adjustQuantity(m.char.Inventory[idx].Name, signOf(key))
+			m.autoSave()
+			return m, nil, true
+		}
+	case keyRemove:
+		if inBounds {
+			m.char.Inventory = append(m.char.Inventory[:idx], m.char.Inventory[idx+1:]...)
+			m.rebuildAfterRemove()
+			return m, nil, true
+		}
+	case keyDonDoff:
+		if inBounds {
+			// A categorized item knows its slot, so equip it directly; only fall back
+			// to the picker for untagged items (or full weapon slots).
+			if slot, ok := m.autoEquipSlot(m.char.Inventory[idx].Category); ok {
+				m.pickEquipSource = idx
+				m.pickSelected = slot
+				m.applyEquip()
+				m.pickEquipSource = -1
+				m.autoSave()
+				return m, nil, true
+			}
+			m.pickEquipSource = idx
+			m.pickOptions = m.equipSlotOptions()
+			m.pickSelected = 0
+			m.activePickerKind = pickerEquip
+			m.picking = true
+			return m, nil, true
+		}
+	}
+	return m, nil, false
+}
+
+// handleTinyItemKey handles action keys in the TinyItems section.
+// a adds a row, x removes it, and =/- adjust the quantity suffix.
+func (m Model) handleTinyItemKey(key string, f field) (tea.Model, tea.Cmd, bool) {
+	idx := f.id.index
+	inBounds := idx >= 0 && idx < len(m.char.TinyItems)
+	switch key {
+	case keyAdd:
+		m.char.TinyItems = append(m.char.TinyItems, "")
+		m.rebuildAfterAdd()
+		return m, nil, true
+	case keyIncr, keyIncrAlt, keyDecr:
+		if inBounds {
+			m.char.TinyItems[idx] = adjustQuantity(m.char.TinyItems[idx], signOf(key))
+			m.autoSave()
+			return m, nil, true
+		}
+	case keyRemove:
+		if inBounds {
+			m.char.TinyItems = append(m.char.TinyItems[:idx], m.char.TinyItems[idx+1:]...)
+			m.rebuildAfterRemove()
+			return m, nil, true
+		}
+	}
+	return m, nil, false
+}
+
+// handleHeroicKey handles action keys in the Heroic Abilities section.
+// Kin-granted abilities are read-only (a adds a chosen ability, enter shows the
+// detail popup). Chosen abilities support a (add), x (remove), enter (edit), and
+// =/- (stack HP/WP-bonus abilities).
+func (m Model) handleHeroicKey(key string, f field) (tea.Model, tea.Cmd, bool) {
+	if f.id.group == groupKinAbility {
+		// Kin abilities are granted by the character's kin; they cannot be removed.
+		switch key {
+		case keyAdd:
+			m.openAbilityPicker()
+		case keyEnter:
+			kin := model.KinAbilities(m.char.Kin)
+			if i := f.id.index; i >= 0 && i < len(kin) {
+				m.detailAbility = kin[i]
+				m.detailMode = true
+				m.activeDetailContent = detailContentAbility
+			}
+		}
+		return m, nil, true
+	}
+	idx := f.id.index
+	inBounds := idx >= 0 && idx < len(m.char.HeroicAbilities)
+	switch key {
+	case keyAdd:
+		m.openAbilityPicker()
+		return m, nil, true
+	case keyEnter:
+		if inBounds {
+			m.activeModal = newAbilityModal(&m, idx)
+			m.modalMode = true
+			return m, textinput.Blink, true
+		}
+		return m, nil, true
+	case keyRemove:
+		if inBounds {
+			m.char.HeroicAbilities = append(m.char.HeroicAbilities[:idx], m.char.HeroicAbilities[idx+1:]...)
+			m.rebuildFields()
+			m.clampFocus()
+			m.char.ClampResources()
+			m.autoSave()
+			return m, nil, true
+		}
+	case keyIncr, keyIncrAlt, keyDecr:
+		if inBounds {
+			// Only HP/WP-bonus abilities can be stacked via the "x N" name suffix.
+			a := m.char.HeroicAbilities[idx]
+			if a.HPBonus != 0 || a.WPBonus != 0 {
+				m.char.HeroicAbilities[idx].Name = adjustQuantity(a.Name, signOf(key))
+				m.char.ClampResources()
+				m.autoSave()
+			}
+			return m, nil, true
+		}
+	}
+	return m, nil, false
+}
+
+// handleMagicSectionKey handles action keys in the Magic section, dispatching
+// by field group (magic skills column vs. prepared spells/tricks column).
+func (m Model) handleMagicSectionKey(key string, f field) (tea.Model, tea.Cmd, bool) {
+	switch f.id.group {
+	case groupMagicSkillLevel, groupMagicSkillAdvanced:
+		switch key {
+		case keyAdd:
+			m.openMagicSkillPicker()
+			return m, nil, true
+		case keyRemove:
+			if i := f.id.index; i >= 0 && i < len(m.char.MagicSkills) {
+				m.char.MagicSkills = append(m.char.MagicSkills[:i], m.char.MagicSkills[i+1:]...)
+				m.rebuildAfterRemove()
+			}
+			return m, nil, true
+		}
+	case groupMagicEmpty:
+		if key == keyAdd {
+			m.openMagicSkillPicker()
+			return m, nil, true
+		}
+	case groupPreparedSpell:
+		// 'g' opens the grimoire; it belongs to the prepared-spells column, not the
+		// magic-skills column.
+		switch key {
+		case keyGrimoire:
+			m.openGrimoire()
+			return m, nil, true
+		case keyEnter:
+			prepared := m.char.PreparedSpells()
+			if i := f.id.index; i >= 0 && i < len(prepared) {
+				m.detailSpell = prepared[i]
+				m.detailMode = true
+				m.activeDetailContent = detailContentSpell
+			}
+			return m, nil, true
+		}
+	case groupPreparedTrick:
+		switch key {
+		case keyGrimoire:
+			m.openGrimoire()
+			return m, nil, true
+		case keyEnter:
+			if i := f.id.index; i >= 0 && i < len(m.char.MagicTricks) {
+				m.detailTrick = m.char.MagicTricks[i]
+				m.detailMode = true
+				m.activeDetailContent = detailContentTrick
+			}
+			return m, nil, true
+		}
+	case groupPreparedEmpty:
+		if key == keyGrimoire {
+			m.openGrimoire()
+			return m, nil, true
+		}
+	}
+	return m, nil, false
+}
+
+// rebuildAfterAdd calls rebuildFields and autoSave after appending a row to a
+// list. clampFocus is not needed because the field list only grew.
+func (m *Model) rebuildAfterAdd() {
+	m.rebuildFields()
+	m.autoSave()
+}
+
+// rebuildAfterRemove calls rebuildFields, clampFocus, and autoSave after
+// removing a row, so focus stays within the (now shorter) field list.
+func (m *Model) rebuildAfterRemove() {
+	m.rebuildFields()
+	m.clampFocus()
+	m.autoSave()
+}
+
+// adjustQuantity increments or decrements the quantity suffix on a name string
+// (e.g. "Torch x3" with dir +1 → "Torch x4"). The quantity floor is 1.
+func adjustQuantity(name string, dir int) string {
+	base, qty := model.ParseQuantity(name)
+	return model.ApplyQuantity(base, max(1, qty+dir))
+}
+
 func (m Model) handlePickerKey(key string) (tea.Model, tea.Cmd) {
 	switch key {
 	case keyEsc, keyQuitAlt:
 		m.picking = false
-		m.pickAbility = false
-		m.pickMagicSkill = false
-		m.pickMagic = false
+		m.activePickerKind = pickerEnum
 		m.pickEquipSource = -1
 	case keyUp, keyVimUp:
 		if m.pickSelected > 0 {
@@ -441,10 +484,10 @@ func (m Model) handlePickerKey(key string) (tea.Model, tea.Cmd) {
 		}
 	case keyDown, keyVimDown:
 		limit := len(m.pickOptions) - 1
-		switch {
-		case m.pickAbility:
+		switch m.activePickerKind {
+		case pickerAbility:
 			limit = len(m.abilityPicks) - 1 // can scroll onto unmet abilities, just not select them
-		case m.pickMagic:
+		case pickerMagic:
 			limit = len(m.magicPicks) - 1
 		}
 		if m.pickSelected < limit {
@@ -453,9 +496,11 @@ func (m Model) handlePickerKey(key string) (tea.Model, tea.Cmd) {
 	case keyEnter:
 		m.applyPickerSelection()
 		m.picking = false
+		m.activePickerKind = pickerEnum
 		m.autoSave()
-		// Picking customLabel opens an edit modal; start its cursor blinking.
-		if m.abilityMode || m.spellMode || m.trickMode || m.professionEdit {
+		// Picking Custom… may open an edit modal (ability) or inline editor (profession);
+		// either way, a text cursor just became active — start it blinking.
+		if m.modalMode || m.professionEdit {
 			return m, textinput.Blink
 		}
 	}
@@ -518,22 +563,17 @@ func (m *Model) openPicker() {
 }
 
 func (m *Model) applyPickerSelection() {
-	if m.pickAbility {
+	switch m.activePickerKind {
+	case pickerAbility:
 		m.applyAbilityPick()
-		m.pickAbility = false
 		return
-	}
-	if m.pickMagicSkill {
+	case pickerMagicSkill:
 		m.applyMagicSkillPick()
-		m.pickMagicSkill = false
 		return
-	}
-	if m.pickMagic {
+	case pickerMagic:
 		m.applyMagicPick()
-		m.pickMagic = false
 		return
-	}
-	if m.pickEquipSource >= 0 {
+	case pickerEquip:
 		m.applyEquip()
 		m.pickEquipSource = -1
 		return
