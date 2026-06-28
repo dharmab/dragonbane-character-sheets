@@ -291,8 +291,7 @@ func (m Model) handleInventoryKey(key string, f field) (tea.Model, tea.Cmd, bool
 			// to the picker for untagged items (or full weapon slots).
 			if slot, ok := m.autoEquipSlot(m.char.Inventory[idx].Category); ok {
 				m.pickEquipSource = idx
-				m.pickSelected = slot
-				m.applyEquip()
+				m.applyEquip(slot)
 				m.pickEquipSource = -1
 				m.autoSave()
 				return m, nil, true
@@ -489,7 +488,7 @@ func (m Model) handlePickerKey(key string) (tea.Model, tea.Cmd) {
 	switch key {
 	case keyEsc, keyQuitAlt:
 		m.picking = false
-		m.activePickerKind = pickerEnum
+		m.activePickerKind = pickerNone
 		m.pickEquipSource = -1
 	case keyUp, keyVimUp:
 		if m.pickSelected > 0 {
@@ -502,7 +501,7 @@ func (m Model) handlePickerKey(key string) (tea.Model, tea.Cmd) {
 	case keyEnter:
 		m.applyPickerSelection()
 		m.picking = false
-		m.activePickerKind = pickerEnum
+		m.activePickerKind = pickerNone
 		m.autoSave()
 		// Picking Custom… may open an edit modal (ability) or inline editor (profession);
 		// either way, a text cursor just became active — start it blinking.
@@ -580,7 +579,10 @@ func (m *Model) applyPickerSelection() {
 		m.applyMagicPick()
 		return
 	case pickerEquip:
-		m.applyEquip()
+		slots := m.equipSlotTargets()
+		if m.pickSelected >= 0 && m.pickSelected < len(slots) {
+			m.applyEquip(slots[m.pickSelected])
+		}
 		m.pickEquipSource = -1
 		return
 	}
@@ -611,27 +613,49 @@ func (m *Model) startProfessionEdit() {
 	m.textInput.SetWidth(textInputWidth)
 }
 
-// autoEquipSlot returns the pickSelected slot index an item of the given category
+// equipSlotTargets returns pointers to each gear slot in the same order as
+// equipSlotOptions, so that pickSelected indexes both lists identically.
+func (m *Model) equipSlotTargets() []*model.Item {
+	targets := make([]*model.Item, 0, 2+len(m.char.Weapons))
+	targets = append(targets, &m.char.Armor, &m.char.Helmet)
+	for i := range m.char.Weapons {
+		targets = append(targets, &m.char.Weapons[i])
+	}
+	return targets
+}
+
+// slotCategory maps a gear slot pointer back to its item category so that
+// untagged items can be tagged when they are first equipped.
+func (m *Model) slotCategory(slot *model.Item) model.ItemCategory {
+	switch slot {
+	case &m.char.Armor:
+		return model.ItemCategoryArmor
+	case &m.char.Helmet:
+		return model.ItemCategoryHelmet
+	default:
+		return model.ItemCategoryWeapon
+	}
+}
+
+// autoEquipSlot returns the gear slot pointer an item of the given category
 // equips into without prompting. Armor and helmet have a single slot each; a
-// weapon takes the first empty weapon slot. Returns false (open the picker) for
+// weapon takes the first empty weapon slot. Returns nil (open the picker) for
 // untagged items or when every weapon slot is occupied.
-func (m *Model) autoEquipSlot(cat model.ItemCategory) (int, bool) {
+func (m *Model) autoEquipSlot(cat model.ItemCategory) (*model.Item, bool) {
 	switch cat {
 	case model.ItemCategoryArmor:
-		return 0, true
+		return &m.char.Armor, true
 	case model.ItemCategoryHelmet:
-		return 1, true
+		return &m.char.Helmet, true
 	case model.ItemCategoryWeapon:
-		for i, weapon := range m.char.Weapons {
-			if weapon.Name == "" {
-				return 2 + i, true
+		for i := range m.char.Weapons {
+			if m.char.Weapons[i].Name == "" {
+				return &m.char.Weapons[i], true
 			}
 		}
-		return 0, false
-	case model.ItemCategoryGeneric:
-		return 0, false
+		return nil, false
 	}
-	return 0, false
+	return nil, false
 }
 
 func (m *Model) equipSlotOptions() []string {
@@ -649,37 +673,21 @@ func (m *Model) equipSlotOptions() []string {
 	return opts
 }
 
-func (m *Model) applyEquip() {
+func (m *Model) applyEquip(slot *model.Item) {
 	idx := m.pickEquipSource
 	if idx < 0 || idx >= len(m.char.Inventory) {
 		return
 	}
 	item := m.char.Inventory[idx]
 
-	// Equipping an untagged item into a slot tags it with that slot's category,
+	// Tag untagged items with the category of the slot they're going into,
 	// matching the auto-tagging Load does for already-slotted items.
-	var displaced model.Item
-	switch m.pickSelected {
-	case 0:
-		if item.Category == model.ItemCategoryGeneric {
-			item.Category = model.ItemCategoryArmor
-		}
-		displaced, m.char.Armor = m.char.Armor, item
-	case 1:
-		if item.Category == model.ItemCategoryGeneric {
-			item.Category = model.ItemCategoryHelmet
-		}
-		displaced, m.char.Helmet = m.char.Helmet, item
-	default:
-		wi := m.pickSelected - 2
-		if wi >= 0 && wi < len(m.char.Weapons) {
-			if item.Category == model.ItemCategoryGeneric {
-				item.Category = model.ItemCategoryWeapon
-			}
-			displaced, m.char.Weapons[wi] = m.char.Weapons[wi], item
-		}
+	if item.Category == model.ItemCategoryGeneric {
+		item.Category = m.slotCategory(slot)
 	}
 
+	displaced := *slot
+	*slot = item
 	m.char.Inventory = append(m.char.Inventory[:idx], m.char.Inventory[idx+1:]...)
 	if displaced.Name != "" {
 		m.char.Inventory = append(m.char.Inventory, displaced)
@@ -721,25 +729,6 @@ func (m *Model) adjustInt(delta int) {
 		}
 	default: // not a numeric field
 	}
-}
-
-// conditionEntry pairs a condition's display name with a pointer accessor into
-// the character's Conditions struct. It is the single source of truth shared by
-// the renderer (view.go) and the toggler (toggleBool).
-type conditionEntry struct {
-	name string
-	ptr  func(*model.Character) *bool
-}
-
-// conditionOrder lists the six conditions in the order they appear in
-// visualLayout and on screen. It is the single source for both rendering and toggling.
-var conditionOrder = []conditionEntry{
-	{model.ConditionExhausted, func(c *model.Character) *bool { return &c.Conditions.Exhausted }},
-	{model.ConditionAngry, func(c *model.Character) *bool { return &c.Conditions.Angry }},
-	{model.ConditionSickly, func(c *model.Character) *bool { return &c.Conditions.Sickly }},
-	{model.ConditionScared, func(c *model.Character) *bool { return &c.Conditions.Scared }},
-	{model.ConditionDazed, func(c *model.Character) *bool { return &c.Conditions.Dazed }},
-	{model.ConditionDisheartend, func(c *model.Character) *bool { return &c.Conditions.Disheartened }},
 }
 
 func (m *Model) toggleBool() {

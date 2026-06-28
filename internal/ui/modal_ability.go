@@ -97,7 +97,7 @@ func (m *Model) openReqPicker(idx int) {
 	for _, requirement := range m.char.HeroicAbilities[idx].Requirements {
 		m.reqChosen[requirement] = true
 	}
-	m.pickOptions = m.pickOptions[:0]
+	m.pickOptions = m.pickOptions[:0] // reset without deallocating
 	for _, skill := range model.CoreSkills {
 		m.pickOptions = append(m.pickOptions, skill.Name)
 	}

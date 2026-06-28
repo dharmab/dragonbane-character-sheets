@@ -166,7 +166,7 @@ func (modal *editModal) handleKey(msg tea.KeyPressMsg, m *Model) (tea.Cmd, modal
 // enum/bool/picker fields are highlighted with styleSelected when active.
 func (modal editModal) view() string {
 	var b strings.Builder
-	sep := styleDim.Render(strings.Repeat("─", 64))
+	sep := divider(64)
 	b.WriteString(styleHeader.Render(" "+modal.title) + "\n")
 	b.WriteString(sep + "\n")
 	for i, f := range modal.fields {
@@ -476,37 +476,44 @@ var itemCategoryOrder = []model.ItemCategory{
 	model.ItemCategoryGeneric, model.ItemCategoryArmor, model.ItemCategoryHelmet, model.ItemCategoryWeapon,
 }
 
+func clearWeaponStats(item *model.Item) {
+	item.Grip = ""
+	item.Range = 0
+	item.Damage = ""
+	item.Durability = 0
+	item.Features = nil
+}
+
+func clearArmorBanes(item *model.Item) {
+	item.BaneToSneaking, item.BaneToEvade, item.BaneToAcrobatics = false, false, false
+}
+
+func clearHelmetBanes(item *model.Item) {
+	item.BaneToAwareness, item.BaneToRanged = false, false
+}
+
 // normalizeItemStats zeroes stat fields that do not belong to the item's current
 // category so stale values from a previous category never persist.
 func normalizeItemStats(item *model.Item) {
-	clearWeapon := func() {
-		item.Grip = ""
-		item.Range = 0
-		item.Damage = ""
-		item.Durability = 0
-		item.Features = nil
-	}
-	clearArmorBanes := func() { item.BaneToSneaking, item.BaneToEvade, item.BaneToAcrobatics = false, false, false }
-	clearHelmetBanes := func() { item.BaneToAwareness, item.BaneToRanged = false, false }
 	switch item.Category {
 	case model.ItemCategoryArmor:
-		clearHelmetBanes()
-		clearWeapon()
+		clearHelmetBanes(item)
+		clearWeaponStats(item)
 	case model.ItemCategoryHelmet:
-		clearArmorBanes()
-		clearWeapon()
+		clearArmorBanes(item)
+		clearWeaponStats(item)
 	case model.ItemCategoryWeapon:
 		item.ArmorRating = 0
-		clearArmorBanes()
-		clearHelmetBanes()
+		clearArmorBanes(item)
+		clearHelmetBanes(item)
 		if item.Grip == "" {
 			item.Grip = model.Grip1H
 		}
 	default: // CatNone
 		item.ArmorRating = 0
-		clearArmorBanes()
-		clearHelmetBanes()
-		clearWeapon()
+		clearArmorBanes(item)
+		clearHelmetBanes(item)
+		clearWeaponStats(item)
 	}
 }
 

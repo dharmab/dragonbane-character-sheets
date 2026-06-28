@@ -19,6 +19,7 @@ func (m *Model) openGrimoire() {
 func (m Model) handleGrimoireKey(key string) (tea.Model, tea.Cmd) {
 	nSpells := len(m.char.Spells)
 	total := nSpells + len(m.char.MagicTricks)
+	trickIdx := m.grimoireSel - nSpells // negative when grimoireSel < nSpells; valid only for trick entries
 	switch key {
 	case keyQuit:
 		return m, tea.Quit
@@ -63,15 +64,15 @@ func (m Model) handleGrimoireKey(key string) (tea.Model, tea.Cmd) {
 			m.modalMode = true
 			return m, textinput.Blink
 		}
-		if ti := m.grimoireSel - nSpells; ti >= 0 && ti < len(m.char.MagicTricks) {
-			tr := m.char.MagicTricks[ti]
+		if trickIdx >= 0 && trickIdx < len(m.char.MagicTricks) {
+			tr := m.char.MagicTricks[trickIdx]
 			if model.IsCoreMagicTrick(tr.Name) {
 				m.detailTrick = tr
 				m.detailMode = true
 				m.activeDetailContent = detailContentTrick
 				return m, nil
 			}
-			m.activeModal = newTrickModal(&m, ti)
+			m.activeModal = newTrickModal(&m, trickIdx)
 			m.modalMode = true
 			return m, textinput.Blink
 		}
@@ -79,8 +80,8 @@ func (m Model) handleGrimoireKey(key string) (tea.Model, tea.Cmd) {
 	case keyRemove:
 		if m.grimoireSel < nSpells {
 			m.char.Spells = append(m.char.Spells[:m.grimoireSel], m.char.Spells[m.grimoireSel+1:]...)
-		} else if ti := m.grimoireSel - nSpells; ti >= 0 && ti < len(m.char.MagicTricks) {
-			m.char.MagicTricks = append(m.char.MagicTricks[:ti], m.char.MagicTricks[ti+1:]...)
+		} else if trickIdx >= 0 && trickIdx < len(m.char.MagicTricks) {
+			m.char.MagicTricks = append(m.char.MagicTricks[:trickIdx], m.char.MagicTricks[trickIdx+1:]...)
 		}
 		if newTotal := len(m.char.Spells) + len(m.char.MagicTricks); m.grimoireSel >= newTotal {
 			m.grimoireSel = max(0, newTotal-1)
@@ -98,7 +99,7 @@ func (m *Model) openMagicSkillPicker() {
 	for _, sk := range m.char.MagicSkills {
 		known[sk.Name] = true
 	}
-	m.pickOptions = m.pickOptions[:0]
+	m.pickOptions = m.pickOptions[:0] // reset without deallocating
 	for _, def := range model.MagicSkills {
 		if !known[def.Name] {
 			m.pickOptions = append(m.pickOptions, def.Name)
@@ -133,7 +134,7 @@ func (m *Model) applyMagicSkillPick() {
 // Custom… entries come first, then everything the character can record (school and
 // prerequisites met) sorted by name, then the rest dimmed and sorted by name.
 func (m *Model) openAddMagicPicker() {
-	m.magicPicks = m.magicPicks[:0]
+	m.magicPicks = m.magicPicks[:0] // reset without deallocating
 	m.magicPicks = append(m.magicPicks,
 		namePick{display: "Custom Spell…", selectable: true},
 		namePick{display: "Custom Trick…", trick: true, selectable: true},
@@ -246,7 +247,7 @@ func (m *Model) openPrereqPicker(idx int) {
 	for _, prerequisite := range m.char.Spells[idx].Prerequisites {
 		m.prereqChosen[prerequisite] = true
 	}
-	m.pickOptions = m.pickOptions[:0]
+	m.pickOptions = m.pickOptions[:0] // reset without deallocating
 	for i, spell := range m.char.Spells {
 		if i == idx || spell.Name == "" {
 			continue

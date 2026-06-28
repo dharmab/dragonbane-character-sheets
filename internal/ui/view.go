@@ -45,6 +45,11 @@ var (
 	styleSelected = lipgloss.NewStyle().Reverse(true).Bold(true)
 )
 
+// divider renders a horizontal rule of n box-drawing dashes in the dim style.
+func divider(n int) string {
+	return styleDim.Render(strings.Repeat("─", n))
+}
+
 // secChunk pairs rendered text with the section constants it covers, so the scroll
 // logic in render() can find which chunk the focused field lives in.
 type secChunk struct {
@@ -97,7 +102,7 @@ func (m Model) render() string {
 	}
 	h := m.height
 
-	sep := styleDim.Render(strings.Repeat("─", w)) + "\n"
+	sep := divider(w) + "\n"
 
 	chunks := []secChunk{
 		{styleHeader.Render(" DRAGONBANE CHARACTER SHEET") + "\n" + sep, nil},
@@ -148,7 +153,7 @@ func (m Model) render() string {
 func (m Model) viewAbilityPicker() string {
 	var b strings.Builder
 	b.WriteString(styleHeader.Render("  Add Heroic Ability") + "\n")
-	b.WriteString(styleDim.Render(strings.Repeat("─", 48)) + "\n")
+	b.WriteString(divider(48) + "\n")
 	start, end := pickWindow(m.pickSelected, len(m.abilityPicks), m.visibleRows())
 	for i := start; i < end; i++ {
 		pick := m.abilityPicks[i]
@@ -165,7 +170,7 @@ func (m Model) viewAbilityPicker() string {
 			b.WriteString("    " + pick.display + "\n")
 		}
 	}
-	b.WriteString(styleDim.Render(strings.Repeat("─", 48)) + "\n")
+	b.WriteString(divider(48) + "\n")
 	b.WriteString(styleDim.Render("  ↑↓ move   enter select   esc cancel") + "\n")
 	return b.String()
 }
@@ -190,7 +195,7 @@ func (m Model) viewPicker() string {
 			name = unnamed
 		}
 		title = "  Equip to slot: " + name
-	default: // pickerEnum: title from the focused field's group
+	default: // pickerNone (enum picker): title from the focused field's group
 		switch m.currentField().id.group {
 		case groupKin:
 			title = "  Select Kin"
@@ -205,7 +210,7 @@ func (m Model) viewPicker() string {
 
 	var b strings.Builder
 	b.WriteString(styleHeader.Render(title) + "\n")
-	b.WriteString(styleDim.Render(strings.Repeat("─", 30)) + "\n")
+	b.WriteString(divider(30) + "\n")
 	start, end := pickWindow(m.pickSelected, len(m.pickOptions), m.visibleRows())
 	for i := start; i < end; i++ {
 		opt := m.pickOptions[i]
@@ -215,7 +220,7 @@ func (m Model) viewPicker() string {
 			b.WriteString("    " + opt + "\n")
 		}
 	}
-	b.WriteString(styleDim.Render(strings.Repeat("─", 30)) + "\n")
+	b.WriteString(divider(30) + "\n")
 	b.WriteString(styleDim.Render("  ↑↓ move   enter select   esc cancel") + "\n")
 	return b.String()
 }
@@ -283,18 +288,18 @@ func (m Model) viewConditionLines() []string {
 }
 
 func (m Model) viewAttrResources(w int) string {
-	// leftWidth=36: first divider (at col leftWidth+1=37) aligns with the inner skill-pair
-	// column split, which sits at col 37 (leading space + 34-wide skill cell + "  │").
-	// midWidth: second divider aligns with the outer general/weapon skill split (col col1W+1).
-	const leftWidth = 36
-	midWidth := column1Width(w) - leftWidth - 3
+	// attrColWidth=36: first divider (at col attrColWidth+1=37) aligns with the inner
+	// skill-pair column split, which sits at col 37 (leading space + 34-wide skill cell + "  │").
+	// derivedColWidth: second divider aligns with the outer general/weapon skill split (col col1W+1).
+	const attrColWidth = 36
+	derivedColWidth := column1Width(w) - attrColWidth - 3
 
 	attrLines := m.viewAttributeLines()
 	derivedLines := m.viewDerivedLines()
 	condLines := m.viewConditionLines()
 
-	leftCol := lipgloss.NewStyle().Width(leftWidth)
-	midCol := lipgloss.NewStyle().Width(midWidth)
+	leftCol := lipgloss.NewStyle().Width(attrColWidth)
+	midCol := lipgloss.NewStyle().Width(derivedColWidth)
 	columnDivider := styleColumn.Render("│")
 	n := max(max(len(attrLines), len(derivedLines)), len(condLines))
 	lines := make([]string, 0, n)
@@ -388,14 +393,11 @@ func (m Model) viewSkills(w int) string {
 		return strings.Join(generalLines, "\n") + "\n"
 	}
 	// Weapon skills are not paired: each weapon skill occupies its own row.
-	weaponLines := func() []string {
-		sectionLines := make([]string, 0, 2+len(weapon))
-		sectionLines = append(sectionLines, styleHeader.Render(" WEAPON SKILLS"), columnHeader)
-		for _, i := range weapon {
-			sectionLines = append(sectionLines, " "+skillCell(i))
-		}
-		return sectionLines
-	}()
+	weaponLines := make([]string, 0, 2+len(weapon))
+	weaponLines = append(weaponLines, styleHeader.Render(" WEAPON SKILLS"), columnHeader)
+	for _, i := range weapon {
+		weaponLines = append(weaponLines, " "+skillCell(i))
+	}
 
 	leftCol := lipgloss.NewStyle().Width(column1Width(w))
 	mainDivider := styleColumn.Render("│")
@@ -623,7 +625,7 @@ func (m Model) viewHeroicAbilities() string {
 func (m Model) viewAbilityDetail() string {
 	a := m.detailAbility
 	var b strings.Builder
-	sep := styleDim.Render(strings.Repeat("─", 64))
+	sep := divider(64)
 	b.WriteString(styleHeader.Render(" "+strings.ToUpper(a.Name)) + "\n")
 	b.WriteString(sep + "\n")
 	cost := "—"
@@ -666,7 +668,7 @@ func wrapText(s string, width int) string {
 func (m Model) viewReqPicker() string {
 	var b strings.Builder
 	b.WriteString(styleHeader.Render("  Required Skills — any one satisfies") + "\n")
-	b.WriteString(styleDim.Render(strings.Repeat("─", 44)) + "\n")
+	b.WriteString(divider(44) + "\n")
 	start, end := pickWindow(m.pickSelected, len(m.pickOptions), m.visibleRows())
 	for i := start; i < end; i++ {
 		opt := m.pickOptions[i]
@@ -681,7 +683,7 @@ func (m Model) viewReqPicker() string {
 			b.WriteString("  " + row + "\n")
 		}
 	}
-	b.WriteString(styleDim.Render(strings.Repeat("─", 44)) + "\n")
+	b.WriteString(divider(44) + "\n")
 	b.WriteString(styleDim.Render("  ↑↓ move   space toggle   enter done   esc cancel") + "\n")
 	return b.String()
 }
@@ -755,7 +757,7 @@ func (m Model) viewMagic(w int) string {
 func (m Model) viewMagicPicker(title string) string {
 	var b strings.Builder
 	b.WriteString(styleHeader.Render("  "+title) + "\n")
-	b.WriteString(styleDim.Render(strings.Repeat("─", 40)) + "\n")
+	b.WriteString(divider(40) + "\n")
 	start, end := pickWindow(m.pickSelected, len(m.magicPicks), m.visibleRows())
 	for i := start; i < end; i++ {
 		pick := m.magicPicks[i]
@@ -772,7 +774,7 @@ func (m Model) viewMagicPicker(title string) string {
 			b.WriteString("    " + pick.display + "\n")
 		}
 	}
-	b.WriteString(styleDim.Render(strings.Repeat("─", 40)) + "\n")
+	b.WriteString(divider(40) + "\n")
 	b.WriteString(styleDim.Render("  ↑↓ move   enter select   esc cancel") + "\n")
 	return b.String()
 }
@@ -783,7 +785,7 @@ func (m Model) viewGrimoire() string {
 	const nameWidth = 26
 	nameCol := lipgloss.NewStyle().Width(nameWidth)
 	var b strings.Builder
-	sep := styleDim.Render(strings.Repeat("─", 70))
+	sep := divider(70)
 
 	limit := model.PreparedSpellLimit(m.char.Attributes[model.AttributeIntelligence])
 	count := fmt.Sprintf("%d/%d prepared", m.char.PreparedSpellCount(), limit)
@@ -840,10 +842,10 @@ func (m Model) viewGrimoire() string {
 func (m Model) viewPrereqPicker() string {
 	var b strings.Builder
 	b.WriteString(styleHeader.Render("  Prerequisite Spells — know any one") + "\n")
-	b.WriteString(styleDim.Render(strings.Repeat("─", 44)) + "\n")
+	b.WriteString(divider(44) + "\n")
 	if len(m.pickOptions) == 0 {
 		b.WriteString(styleDim.Render("  (no other spells in the grimoire)") + "\n")
-		b.WriteString(styleDim.Render(strings.Repeat("─", 44)) + "\n")
+		b.WriteString(divider(44) + "\n")
 		b.WriteString(styleDim.Render("  esc cancel") + "\n")
 		return b.String()
 	}
@@ -861,7 +863,7 @@ func (m Model) viewPrereqPicker() string {
 			b.WriteString("  " + row + "\n")
 		}
 	}
-	b.WriteString(styleDim.Render(strings.Repeat("─", 44)) + "\n")
+	b.WriteString(divider(44) + "\n")
 	b.WriteString(styleDim.Render("  ↑↓ move   space toggle   enter done   esc cancel") + "\n")
 	return b.String()
 }
@@ -870,7 +872,7 @@ func (m Model) viewPrereqPicker() string {
 func (m Model) viewSpellDetail() string {
 	sp := m.detailSpell
 	var b strings.Builder
-	sep := styleDim.Render(strings.Repeat("─", 64))
+	sep := divider(64)
 	name := sp.Name
 	if name == "" {
 		name = unnamed
@@ -905,7 +907,7 @@ func (m Model) viewSpellDetail() string {
 func (m Model) viewTrickDetail() string {
 	tr := m.detailTrick
 	var b strings.Builder
-	sep := styleDim.Render(strings.Repeat("─", 64))
+	sep := divider(64)
 	name := tr.Name
 	if name == "" {
 		name = unnamed

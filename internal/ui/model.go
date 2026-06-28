@@ -236,7 +236,7 @@ func (m Model) currentMode() appMode {
 type pickerKind int
 
 const (
-	pickerEnum       pickerKind = iota // standard enum-field picker
+	pickerNone       pickerKind = iota // no active picker (zero/reset value); falls through to enum-field picking
 	pickerAbility                      // heroic ability add picker
 	pickerMagicSkill                   // magic skill add picker
 	pickerMagic                        // grimoire add picker
@@ -369,22 +369,7 @@ func buildSkillRows(c *model.Character) [][]fieldID {
 			generalIdx = append(generalIdx, i)
 		}
 	}
-	skillPairRows := func(indices []int) [][]fieldID {
-		n := len(indices)
-		nRows := (n + 1) / 2
-		result := make([][]fieldID, 0, nRows)
-		for r := range nRows {
-			a := indices[r]
-			row := []fieldID{idSkillLevel(a), idSkillAdvanced(a)}
-			if ri := r + nRows; ri < n {
-				b := indices[ri]
-				row = append(row, idSkillLevel(b), idSkillAdvanced(b))
-			}
-			result = append(result, row)
-		}
-		return result
-	}
-	genRows := skillPairRows(generalIdx)
+	genRows := pairSkillIndices(generalIdx)
 	weapRows := make([][]fieldID, 0, len(weaponIdx))
 	for _, i := range weaponIdx {
 		weapRows = append(weapRows, []fieldID{idSkillLevel(i), idSkillAdvanced(i)})
@@ -401,6 +386,24 @@ func buildSkillRows(c *model.Character) [][]fieldID {
 		rows = append(rows, row)
 	}
 	return rows
+}
+
+// pairSkillIndices lays out skill indices two per row: indices[0..nRows-1] fill the
+// left cells, indices[nRows..n-1] fill the right cells of the same rows.
+func pairSkillIndices(indices []int) [][]fieldID {
+	n := len(indices)
+	nRows := (n + 1) / 2
+	result := make([][]fieldID, 0, nRows)
+	for r := range nRows {
+		a := indices[r]
+		row := []fieldID{idSkillLevel(a), idSkillAdvanced(a)}
+		if ri := r + nRows; ri < n {
+			b := indices[ri]
+			row = append(row, idSkillLevel(b), idSkillAdvanced(b))
+		}
+		result = append(result, row)
+	}
+	return result
 }
 
 // buildMagicRows lays out the Magic section: known magic skills on the left (level +
@@ -722,6 +725,25 @@ func enumFieldFor(group fieldGroup) (enumField, bool) {
 	default:
 		return enumField{}, false
 	}
+}
+
+// conditionEntry pairs a condition's display name with a pointer accessor into
+// the character's Conditions struct. It is the single source of truth shared by
+// the renderer (view.go) and the toggler (update.go).
+type conditionEntry struct {
+	name string
+	ptr  func(*model.Character) *bool
+}
+
+// conditionOrder lists the six conditions in the order they appear in
+// visualLayout and on screen.
+var conditionOrder = []conditionEntry{
+	{model.ConditionExhausted, func(c *model.Character) *bool { return &c.Conditions.Exhausted }},
+	{model.ConditionAngry, func(c *model.Character) *bool { return &c.Conditions.Angry }},
+	{model.ConditionSickly, func(c *model.Character) *bool { return &c.Conditions.Sickly }},
+	{model.ConditionScared, func(c *model.Character) *bool { return &c.Conditions.Scared }},
+	{model.ConditionDazed, func(c *model.Character) *bool { return &c.Conditions.Dazed }},
+	{model.ConditionDisheartend, func(c *model.Character) *bool { return &c.Conditions.Disheartened }},
 }
 
 func (m Model) enumOptions() (options []string, current int) {
