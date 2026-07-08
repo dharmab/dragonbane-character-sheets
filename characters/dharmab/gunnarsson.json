@@ -1,18 +1,18 @@
 {
-  "name": "Dr. James Frost",
+  "name": "Njall Gunnarsson",
   "kin": "Human",
-  "profession": "Scholar",
+  "profession": "Knight",
   "age": "Adult",
   "attributes": {
-    "AGL": 11,
+    "AGL": 14,
     "CHA": 12,
-    "CON": 17,
-    "INT": 16,
-    "STR": 10,
-    "WIL": 16
+    "CON": 14,
+    "INT": 12,
+    "STR": 16,
+    "WIL": 13
   },
   "current_hp": 14,
-  "current_wp": 16,
+  "current_wp": 13,
   "conditions": {
     "exhausted": false,
     "sickly": false,
@@ -22,66 +22,66 @@
     "disheartened": false
   },
   "round_rest_used": false,
-  "stretch_rest_used": true,
+  "stretch_rest_used": false,
   "skills": [
     {
       "name": "Acrobatics",
-      "level": 5,
+      "level": 6,
       "advanced": false
     },
     {
       "name": "Awareness",
-      "level": 14,
-      "advanced": false
-    },
-    {
-      "name": "Bartering",
-      "level": 5,
-      "advanced": false
-    },
-    {
-      "name": "Beast Lore",
-      "level": 7,
-      "advanced": false
-    },
-    {
-      "name": "Bluffing",
       "level": 10,
       "advanced": false
     },
     {
+      "name": "Bartering",
+      "level": 12,
+      "advanced": false
+    },
+    {
+      "name": "Beast Lore",
+      "level": 10,
+      "advanced": false
+    },
+    {
+      "name": "Bluffing",
+      "level": 12,
+      "advanced": false
+    },
+    {
       "name": "Bushcraft",
-      "level": 8,
+      "level": 5,
       "advanced": false
     },
     {
       "name": "Crafting",
-      "level": 5,
+      "level": 7,
       "advanced": false
     },
     {
       "name": "Evade",
-      "level": 13,
+      "level": 6,
       "advanced": false
     },
     {
       "name": "Healing",
-      "level": 14,
-      "advanced": false
-    },
-    {
-      "name": "Hunting \u0026 Fishing",
       "level": 5,
       "advanced": false
     },
     {
+      "name": "Hunting \u0026 Fishing",
+      "level": 6,
+      "advanced": false
+    },
+    {
       "name": "Languages",
-      "level": 14,
+      "level": 5,
       "advanced": false
     },
     {
       "name": "Myths \u0026 Legends",
-      "level": 14,
+      "level": 10,
       "advanced": false
     },
     {
@@ -91,17 +91,17 @@
     },
     {
       "name": "Persuasion",
-      "level": 11,
+      "level": 10,
       "advanced": false
     },
     {
       "name": "Riding",
-      "level": 5,
+      "level": 12,
       "advanced": false
     },
     {
       "name": "Seamanship",
-      "level": 7,
+      "level": 5,
       "advanced": false
     },
     {
@@ -111,124 +111,152 @@
     },
     {
       "name": "Sneaking",
-      "level": 5,
+      "level": 6,
       "advanced": false
     },
     {
       "name": "Spot Hidden",
-      "level": 15,
+      "level": 5,
       "advanced": false
     },
     {
       "name": "Swimming",
-      "level": 5,
+      "level": 6,
       "advanced": false
     },
     {
       "name": "Axes",
-      "level": 5,
+      "level": 7,
       "advanced": false
     },
     {
       "name": "Bows",
-      "level": 5,
-      "advanced": false
-    },
-    {
-      "name": "Brawling",
-      "level": 5,
-      "advanced": false
-    },
-    {
-      "name": "Crossbows",
-      "level": 10,
-      "advanced": false
-    },
-    {
-      "name": "Hammers",
-      "level": 5,
-      "advanced": false
-    },
-    {
-      "name": "Knives",
       "level": 12,
       "advanced": false
     },
     {
+      "name": "Brawling",
+      "level": 7,
+      "advanced": false
+    },
+    {
+      "name": "Crossbows",
+      "level": 6,
+      "advanced": false
+    },
+    {
+      "name": "Hammers",
+      "level": 7,
+      "advanced": false
+    },
+    {
+      "name": "Knives",
+      "level": 6,
+      "advanced": false
+    },
+    {
       "name": "Slings",
-      "level": 5,
+      "level": 6,
       "advanced": false
     },
     {
       "name": "Spears",
-      "level": 5,
+      "level": 14,
       "advanced": false
     },
     {
       "name": "Staves",
-      "level": 5,
+      "level": 6,
       "advanced": false
     },
     {
       "name": "Swords",
-      "level": 5,
+      "level": 14,
       "advanced": false
     }
   ],
   "weakness": {
-    "name": "Obstinate",
-    "description": "I never admit when I'm wrong."
+    "name": "Gullible",
+    "description": "I always believe what others say."
   },
   "armor": {
-    "name": "",
-    "weight": 1
+    "name": "Chainmail",
+    "weight": 1,
+    "category": "armor",
+    "armor_rating": 4,
+    "bane_sneaking": true,
+    "bane_evade": true
   },
   "helmet": {
-    "name": "",
-    "weight": 1
+    "name": "Open Helmet",
+    "weight": 1,
+    "category": "helmet",
+    "armor_rating": 1,
+    "bane_awareness": true
   },
   "weapons_at_hand": [
     {
-      "name": "Knife",
+      "name": "Short Sword",
       "weight": 1,
       "category": "weapon",
       "grip": "1H",
-      "range": 2
+      "range": 2,
+      "damage": "d10",
+      "durability": 12,
+      "features": [
+        "Piercing",
+        "Slashing"
+      ]
     },
     {
-      "name": "",
-      "weight": 1
+      "name": "Lance",
+      "weight": 1,
+      "category": "weapon",
+      "grip": "1H",
+      "range": 4,
+      "damage": "2d10",
+      "durability": 12,
+      "features": [
+        "Long",
+        "Piercing",
+        "Requires combat trained mount"
+      ]
     },
     {
-      "name": "",
-      "weight": 1
+      "name": "Small shield",
+      "weight": 1,
+      "category": "weapon",
+      "grip": "1H",
+      "range": 2,
+      "damage": "d8",
+      "durability": 15,
+      "features": [
+        "Bludgeoning"
+      ]
     }
   ],
   "inventory": [
     {
-      "name": "Lantern",
-      "weight": 1
-    },
-    {
-      "name": "Lamp oil",
-      "weight": 1
-    },
-    {
-      "name": "Bandage x10",
-      "weight": 1
-    },
-    {
-      "name": "Ration x4",
+      "name": "Rations x4",
       "weight": 1
     }
   ],
   "tiny_items": [
-    "Silver coin x10",
-    "Gold coin x10",
-    "Flint \u0026 tinder",
-    "Spice vial"
+    "Silver x12",
+    "Bone whistle"
   ],
-  "heroic_abilities": [],
+  "heroic_abilities": [
+    {
+      "name": "Guardian",
+      "wp_cost": 3,
+      "description": "When an enemy within 2m attacks an adjacent ally, force it to attack you instead. Usable out of turn; not an action.",
+      "requirements": [
+        "Axes",
+        "Hammers",
+        "Swords"
+      ]
+    }
+  ],
   "magic_skills": [],
   "grimoire": [],
   "magic_tricks": []
