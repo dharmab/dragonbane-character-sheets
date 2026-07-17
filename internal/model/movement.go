@@ -2,15 +2,7 @@ package model
 
 // Movement returns the character's movement in meters.
 func (c *Character) Movement() int {
-	var base int
-	switch c.Kin {
-	case Wolfkin:
-		base = 12
-	case Halfling, Dwarf, Mallard:
-		base = 8
-	default: // Human, Elf
-		base = 10
-	}
+	base := c.Kin.BaseMovement
 
 	var mod int
 	switch agility := c.Attributes[AttributeAgility]; {

@@ -233,7 +233,7 @@ func (m Model) viewIdentity() string {
 	return fmt.Sprintf(" Name: %s   Age: %s   Kin: %s   Profession: %s   Weakness: %s   %s   %s\n",
 		m.formatText(idName, m.char.Name),
 		m.formatEnum(idAge, string(m.char.Age)),
-		m.formatEnum(idKin, string(m.char.Kin)),
+		m.formatEnum(idKin, m.char.Kin.Name),
 		m.formatEnum(idProfession, string(m.char.Profession)),
 		m.formatText(idWeaknessName, weaknessName),
 		m.formatBool(idRestRound, "Used Round Rest", m.char.UsedRoundRest),
@@ -596,7 +596,7 @@ func (m Model) viewHeroicAbilities() string {
 		lines = append(lines, " "+nameCell+" "+costCol.Render(costStr))
 	}
 
-	kin := model.KinAbilities(m.char.Kin)
+	kin := m.char.Kin.HeroicAbilities
 	for _, e := range heroicOrder(m.char) {
 		switch e.id.group {
 		case groupKinAbility:
@@ -612,7 +612,7 @@ func (m Model) viewHeroicAbilities() string {
 		default: // heroicOrder only yields kin/chosen ability ids
 		}
 	}
-	if len(model.KinAbilities(m.char.Kin)) == 0 && len(m.char.HeroicAbilities) == 0 {
+	if len(m.char.Kin.HeroicAbilities) == 0 && len(m.char.HeroicAbilities) == 0 {
 		lines = append(lines, " "+m.formatText(idHeroicAbilityEmpty, "(none — press 'a' to add)"))
 	}
 

@@ -344,7 +344,7 @@ func (m Model) handleHeroicKey(key string, f field) (tea.Model, tea.Cmd, bool) {
 		case keyAdd:
 			m.openAbilityPicker()
 		case keyEnter:
-			kin := model.KinAbilities(m.char.Kin)
+			kin := m.char.Kin.HeroicAbilities
 			if i := f.id.index; i >= 0 && i < len(kin) {
 				m.detailAbility = kin[i]
 				m.detailMode = true

@@ -39,11 +39,11 @@ func preparedColumnOrder(c *model.Character) []sortedEntry {
 
 // heroicOrder returns all heroic abilities — kin-granted and chosen together — as
 // one list sorted alphabetically by name (case-insensitive). The ids still address
-// KinAbilities(Kin) / HeroicAbilities by index, so sorting only affects
+// Kin.HeroicAbilities / HeroicAbilities by index, so sorting only affects
 // display/navigation order. Both visualLayout and view.go use this, keeping the
 // grid and the renderer in sync.
 func heroicOrder(c *model.Character) []sortedEntry {
-	kin := model.KinAbilities(c.Kin)
+	kin := c.Kin.HeroicAbilities
 	entries := make([]sortedEntry, 0, len(kin)+len(c.HeroicAbilities))
 	for i, ability := range kin {
 		entries = append(entries, sortedEntry{idKinAbility(i), ability.Name})
@@ -97,7 +97,7 @@ const (
 	groupInventoryEmpty
 	groupTinyItem // index → model.TinyItems
 	groupTinyEmpty
-	groupKinAbility    // index → KinAbilities(model.Kin)
+	groupKinAbility    // index → model.Kin.HeroicAbilities
 	groupHeroicAbility // index → model.HeroicAbilities
 	groupHeroicAbilityEmpty
 	groupMagicSkillLevel    // index → model.MagicSkills
@@ -708,9 +708,13 @@ func enumFieldFor(group fieldGroup) (enumField, bool) {
 	switch group {
 	case groupKin:
 		return enumField{
-			options: toStrings(model.AllKins),
-			get:     func(c *model.Character) string { return string(c.Kin) },
-			set:     func(c *model.Character, v string) { c.Kin = model.Kin(v) },
+			options: model.KinNames(),
+			get:     func(c *model.Character) string { return c.Kin.Name },
+			set: func(c *model.Character, v string) {
+				if k, ok := model.KinByName(v); ok {
+					c.Kin = k
+				}
+			},
 		}, true
 	case groupProfession:
 		return enumField{
