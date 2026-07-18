@@ -111,9 +111,17 @@ func (m Model) render() string {
 		{m.viewSkills(w) + sep, []int{sectionSkills}},
 		{m.viewMagic(w) + sep, []int{sectionMagic}},
 		{m.viewHeroicAbilities() + sep, []int{sectionHeroic}},
-		{m.viewGear() + sep, []int{sectionGear}},
-		{m.viewInventoryAndTiny(w), []int{sectionInventory, sectionTinyItems}},
 	}
+	// Kin traits are display-only and only shown for kin that have any, so this
+	// chunk is spliced in conditionally rather than always appended (an empty
+	// viewKinTraits() would still emit a stray blank line).
+	if len(m.char.Kin.Traits) > 0 {
+		chunks = append(chunks, secChunk{m.viewKinTraits() + sep, nil})
+	}
+	chunks = append(chunks,
+		secChunk{m.viewGear() + sep, []int{sectionGear}},
+		secChunk{m.viewInventoryAndTiny(w), []int{sectionInventory, sectionTinyItems}},
+	)
 
 	// Status bar is pinned at the bottom and excluded from scrollable content.
 	statusBar := sep + m.viewStatus()
@@ -618,6 +626,21 @@ func (m Model) viewHeroicAbilities() string {
 
 	lines = append(lines, styleDim.Render(" a add   x remove   enter view/edit   =/- stack"))
 	return strings.Join(lines, "\n") + "\n"
+}
+
+// viewKinTraits renders the current kin's traits as a single horizontal line of
+// names (e.g. "Nocturnal  Large"). Callers must only invoke this when the kin
+// has at least one trait — the section is omitted entirely otherwise.
+func (m Model) viewKinTraits() string {
+	traits := m.char.Kin.Traits
+	names := make([]string, len(traits))
+	for i, t := range traits {
+		names[i] = t.Name
+	}
+	var b strings.Builder
+	b.WriteString(styleHeader.Render(" KIN TRAITS") + "\n")
+	b.WriteString(" " + strings.Join(names, "  ") + "\n")
+	return b.String()
 }
 
 // viewAbilityDetail is the read-only popup shown when viewing a kin ability's details.
