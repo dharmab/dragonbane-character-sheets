@@ -8,7 +8,7 @@ const (
 	ConditionDazed       = "Dazed"
 	ConditionAngry       = "Angry"
 	ConditionScared      = "Scared"
-	ConditionDisheartend = "Disheatend"
+	ConditionDisheartend = "Disheartend"
 )
 
 var AllConditions = []Condition{
