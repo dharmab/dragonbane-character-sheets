@@ -425,18 +425,21 @@ func (m Model) viewSkills(w int) string {
 }
 
 func (m Model) viewGear() string {
-	nameCol := lipgloss.NewStyle().Width(16)
+	const minNameWidth = 16
 	arCol := lipgloss.NewStyle().Width(2).Align(lipgloss.Right)
 	gripCol := lipgloss.NewStyle().Width(3)
 	dmgCol := lipgloss.NewStyle().Width(4)
 	rngCol := lipgloss.NewStyle().Width(4).Align(lipgloss.Right)
 	numCol := lipgloss.NewStyle().Width(3).Align(lipgloss.Right)
 
-	nameCell := func(id fieldID, name string) string {
+	// nameCell renders name left-padded to width without wrapping: a name
+	// longer than width is printed in full rather than truncated or wrapped,
+	// so the column only widens for tables that actually need it.
+	nameCell := func(id fieldID, name string, width int) string {
 		if name == "" {
 			name = "—"
 		}
-		return nameCol.Render(m.formatText(id, name))
+		return lipgloss.NewStyle().Width(width).Inline(true).Render(m.formatText(id, name))
 	}
 	// AR, banes, grip, damage and range don't change in play, so they are
 	// read-only here (edit them in the item modal); only durability is focusable.
@@ -449,48 +452,51 @@ func (m Model) viewGear() string {
 
 	lines := []string{styleHeader.Render(" GEAR")}
 
-	// Armor and helmet share a Name/AR/Banes shape; their banes differ.
-	abHdr := styleDim.Render(fmt.Sprintf(" %-16s %2s  %s", "Name", "AR", "Banes"))
-
 	lines = append(lines, "", styleHeader.Render(" ARMOR"))
 	if a := m.char.Armor; a.Name == "" {
-		lines = append(lines, " "+nameCell(idArmor, ""))
+		lines = append(lines, " "+nameCell(idArmor, "", minNameWidth))
 	} else {
+		nameWidth := max(minNameWidth, len(a.Name))
 		banes := strings.Join([]string{
 			bane("Sneaking", a.BaneToSneaking),
 			bane("Evade", a.BaneToEvade),
 			bane("Acrobatics", a.BaneToAcrobatics),
 		}, "  ")
-		lines = append(lines, abHdr,
-			" "+nameCell(idArmor, a.Name)+" "+arCol.Render(strconv.Itoa(a.ArmorRating))+"  "+banes)
+		lines = append(lines, styleDim.Render(fmt.Sprintf(" %-*s %2s  %s", nameWidth, "Name", "AR", "Banes")),
+			" "+nameCell(idArmor, a.Name, nameWidth)+" "+arCol.Render(strconv.Itoa(a.ArmorRating))+"  "+banes)
 	}
 
 	lines = append(lines, "", styleHeader.Render(" HELMET"))
 	if h := m.char.Helmet; h.Name == "" {
-		lines = append(lines, " "+nameCell(idHelmet, ""))
+		lines = append(lines, " "+nameCell(idHelmet, "", minNameWidth))
 	} else {
+		nameWidth := max(minNameWidth, len(h.Name))
 		banes := strings.Join([]string{
 			bane("Awareness", h.BaneToAwareness),
 			bane("Ranged Attacks", h.BaneToRanged),
 		}, "  ")
-		lines = append(lines, abHdr,
-			" "+nameCell(idHelmet, h.Name)+" "+arCol.Render(strconv.Itoa(h.ArmorRating))+"  "+banes)
+		lines = append(lines, styleDim.Render(fmt.Sprintf(" %-*s %2s  %s", nameWidth, "Name", "AR", "Banes")),
+			" "+nameCell(idHelmet, h.Name, nameWidth)+" "+arCol.Render(strconv.Itoa(h.ArmorRating))+"  "+banes)
 	}
 
+	weaponNameWidth := minNameWidth
+	for _, w := range m.char.Weapons {
+		weaponNameWidth = max(weaponNameWidth, len(w.Name))
+	}
 	lines = append(lines, "", styleHeader.Render(" WEAPONS"),
-		styleDim.Render(fmt.Sprintf(" %-16s %-3s %-4s %4s %3s  %s", "Name", "Grp", "Dmg", "Rng", "Dur", "Features")))
+		styleDim.Render(fmt.Sprintf(" %-*s %-3s %-4s %4s %3s  %s", weaponNameWidth, "Name", "Grp", "Dmg", "Rng", "Dur", "Features")))
 	for i := range 3 {
 		var w model.Item
 		if i < len(m.char.Weapons) {
 			w = m.char.Weapons[i]
 		}
 		if w.Name == "" {
-			lines = append(lines, " "+nameCell(idWeaponAtHand(i), ""))
+			lines = append(lines, " "+nameCell(idWeaponAtHand(i), "", weaponNameWidth))
 			continue
 		}
 		grip := dash(string(w.Grip))
 		dmg := dash(w.Damage)
-		lines = append(lines, " "+nameCell(idWeaponAtHand(i), w.Name)+" "+
+		lines = append(lines, " "+nameCell(idWeaponAtHand(i), w.Name, weaponNameWidth)+" "+
 			gripCol.Render(grip)+" "+dmgCol.Render(dmg)+" "+
 			rngCol.Render(strconv.Itoa(w.Range)+"m")+" "+
 			numCol.Render(m.formatInt(idWeaponDurability(i), w.Durability))+"  "+
