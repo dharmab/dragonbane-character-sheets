@@ -22,7 +22,7 @@
     "disheartened": false
   },
   "round_rest_used": false,
-  "stretch_rest_used": false,
+  "stretch_rest_used": true,
   "skills": [
     {
       "name": "Acrobatics",
@@ -31,7 +31,7 @@
     },
     {
       "name": "Awareness",
-      "level": 10,
+      "level": 12,
       "advanced": false
     },
     {
@@ -51,7 +51,7 @@
     },
     {
       "name": "Bushcraft",
-      "level": 5,
+      "level": 7,
       "advanced": false
     },
     {
@@ -91,7 +91,7 @@
     },
     {
       "name": "Persuasion",
-      "level": 10,
+      "level": 12,
       "advanced": false
     },
     {
@@ -116,7 +116,7 @@
     },
     {
       "name": "Spot Hidden",
-      "level": 5,
+      "level": 10,
       "advanced": false
     },
     {
@@ -161,7 +161,7 @@
     },
     {
       "name": "Spears",
-      "level": 14,
+      "level": 16,
       "advanced": false
     },
     {
@@ -171,7 +171,7 @@
     },
     {
       "name": "Swords",
-      "level": 14,
+      "level": 15,
       "advanced": false
     }
   ],
@@ -196,17 +196,54 @@
   },
   "weapons_at_hand": [
     {
-      "name": "Short Sword",
+      "name": "Magic Longsword",
       "weight": 1,
       "category": "weapon",
       "grip": "1H",
       "range": 2,
-      "damage": "d10",
-      "durability": 12,
+      "damage": "2d8",
+      "durability": 15,
+      "features": [
+        "Piercing",
+        "Slashing",
+        "Enchant Weapon 1",
+        "Permanance 1"
+      ]
+    },
+    {
+      "name": "Broadsword",
+      "weight": 1,
+      "category": "weapon",
+      "grip": "1H",
+      "range": 2,
+      "damage": "2d6",
+      "durability": 15,
       "features": [
         "Piercing",
         "Slashing"
       ]
+    },
+    {
+      "name": "Magic Small Shield",
+      "weight": 1,
+      "category": "weapon",
+      "grip": "1H",
+      "range": 2,
+      "damage": "d8",
+      "durability": 15,
+      "features": [
+        "Bludgeoning",
+        "Dispel 3",
+        "Magic Shield 3",
+        "Magic Seal 3",
+        "Permanance 3"
+      ]
+    }
+  ],
+  "inventory": [
+    {
+      "name": "Rations x3",
+      "weight": 1
     },
     {
       "name": "Lance",
@@ -219,41 +256,45 @@
       "features": [
         "Long",
         "Piercing",
-        "Requires combat trained mount"
+        "Requires combat trained mount to use 1H"
       ]
     },
     {
-      "name": "Small shield",
-      "weight": 1,
-      "category": "weapon",
-      "grip": "1H",
-      "range": 2,
-      "damage": "d8",
-      "durability": 15,
-      "features": [
-        "Bludgeoning"
-      ]
-    }
-  ],
-  "inventory": [
-    {
-      "name": "Rations x4",
+      "name": "Sleeping Fur",
       "weight": 1
     }
   ],
   "tiny_items": [
-    "Silver x10",
+    "Silver x4",
     "Bone whistle",
-    "Combat trained horse"
+    "Combat trained horse",
+    "White pearl"
   ],
   "heroic_abilities": [
     {
       "name": "Guardian",
-      "wp_cost": 3,
+      "wp_cost": 2,
       "description": "When an enemy within 2m attacks an adjacent ally, force it to attack you instead. Usable out of turn; not an action.",
       "requirements": [
         "Axes",
         "Hammers",
+        "Swords"
+      ]
+    },
+    {
+      "name": "Dragonslayer",
+      "wp_cost": 3,
+      "description": "An attack aimed at a monster (not a normal NPC) deals an additional D8 damage. Activate after you roll to hit, before damage.",
+      "requirements": [
+        "Axes",
+        "Bows",
+        "Brawling",
+        "Crossbows",
+        "Hammers",
+        "Knives",
+        "Slings",
+        "Spears",
+        "Staves",
         "Swords"
       ]
     }
